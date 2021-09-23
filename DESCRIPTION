@@ -1,16 +1,20 @@
 Package: TdaCpdSim
-Title: What the Package Does (One Line, Title Case)
+Title: Evaluate Change Point Detection via Topological Data Analysis by Simulations
 Version: 0.0.0.9000
 Authors@R: 
-    person(given = "First",
-           family = "Last",
+    person(given = "Christof",
+           family = "Schötz",
            role = c("aut", "cre"),
-           email = "first.last@example.com",
-           comment = c(ORCID = "YOUR-ORCID-ID"))
-Description: What the package does (one paragraph).
-License: `use_mit_license()`, `use_gpl3_license()` or friends to pick a
-    license
+           email = "math@christof-schoetz.de")
+Description: With this package you can simulate a time series of point configurations, create persistence diagrams from this, apply TDA-based change point detection algorithms, and evaluate the simulation results.
+License: MIT + file LICENSE
 Encoding: UTF-8
 LazyData: true
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.1.2
+Imports: 
+    dplyr,
+    magrittr,
+    purrr,
+    TDA,
+    tibble
