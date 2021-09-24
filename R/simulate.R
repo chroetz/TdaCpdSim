@@ -60,61 +60,54 @@ call_proc <- function(proc, pre_pros, dist_mats, pd_ts) {
 }
 
 #' @export
-simulate <- function(samplers, estimators, def) {
+simulate <- function(samplers, estimators, required_dists, def) {
   sim_pt <- proc.time()
   cat("sim: start\n")
 
-  estimators %>%
-    filter(arg_dist) %>%
-    select(starts_with("arg_dist_")) %>%
-    distinct() ->
-    required_dist
+  prepros <- unique(estimators$prepro)
 
   lapply(seq_len(nrow(samplers)), \(i) {
-    samp_pt <- proc.time()
-    cat("  sampler:", i, "/", nrow(samplers), "start\n")
     s <- (samplers %>% filter(s_id == i))[1,]
+    samp_pt <- proc.time()
+    cat("  sampler:", i, "/", nrow(samplers), "(",s$s_name,") start\n")
     lapply(seq_len(s$reps), \(j) {
       rep_pt <- proc.time()
       cat("    rep:", j, "/", s$reps)
       point_ts <- sample_point_ts(s, def)
       pd_ts <- map(point_ts, pd, filtration=s$filt)
 
-      required_dist %>%
+      required_dists %>%
         rowwise() %>%
-        mutate(matrix = list(dist_mat_wasserstein(pd_ts, arg_dist_power, arg_dist_dim))) ->
-        dist_mats
+        mutate(matrix = list(dist_mat_wasserstein(pd_ts, power, dim))) ->
+        dist_mats_tb
+      dist_mats <- dist_mats_tb$matrix
+      names(dist_mats) <- dist_mats_tb$d_name
 
-      # TODO:
-      # from estimators, extract preprocessors, postprocessors, cpds
+      prepro_tss <- lapply(
+        prepros,
+        \(prep) def$prepros[[prep]](point_ts, pd_ts, dist_mats))
+      names(prepro_tss) <- prepros
 
-
-      preps <- list()
-      values <- list()
+      postpro_tss <- list()
+      estimations <- double()
       for (l in seq_len(nrow(estimators))) {
-        prep <- call_proc(estimators[l, ], def$pre, dist_mats, pd_ts)
-        preps[[l]] <- prep
-        post <- def$post[[estimators$post_pro[[l]]]]
-        v <- double(nrow(post))
-        for (k in seq_len(nrow(post))) {
-          column_sel <- post$column_sel[[k]]
-          x <- if (length(column_sel) > 0) prep[,column_sel] else prep
-          v[k] <- def$post_fun[[post$fun[[k]]]](x)
-        }
-        values[[l]] <- tibble(estim=v, post_id=seq_len(nrow(post)))
+        e <- (estimators %>% filter(e_id == l))[1,]
+        if (e$e_name == "LT_D1") browser() # something produces NA
+        postpro_tss[[l]] <- def$postpros[[e$postpro]](prepro_tss[[e$prepro]])
+        estimations[[l]] <- def$cpds[[e$cpd]](prepro_tss[[l]])
       }
 
       cat(", duration:", (proc.time()-rep_pt)[3], "s\n")
-      tb <- tibble(proc_id=estimators$proc_id, rep_nr=j, values=values)
-      tb$preps <- preps
-      tb$len <- map_int(preps, NROW)
+      tb <- tibble(e_name=estimators$e_name, rep_nr=j, estimation=estimations)
+      tb$postpro_ts <- postpro_tss
+      tb$len <- map_int(postpro_tss, length)
       tb
     }) -> r
     r %>%
       bind_rows() %>%
-      mutate(opt_id = i, .before=1) ->
+      mutate(s_id = i, .before=1) ->
       res
-    cat("  opt:", i, "/", nrow(samplers), "end, duration:", (proc.time()-samp_pt)[3], "s\n")
+    cat("  sampler:", i, "/", nrow(samplers), "end, duration:", (proc.time()-samp_pt)[3], "s\n")
     res
   }) %>%
     bind_rows() ->
