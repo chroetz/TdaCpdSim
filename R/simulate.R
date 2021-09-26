@@ -66,10 +66,11 @@ simulate <- function(samplers, estimators, required_dists, def) {
 
   prepros <- unique(estimators$prepro)
 
-  lapply(seq_len(nrow(samplers)), \(i) {
-    s <- (samplers %>% filter(s_id == i))[1,]
+  lapply(seq_along(samplers$s_name), \(i) {
+    sn <- samplers$s_name[i]
+    s <- (samplers %>% filter(s_name == sn))[1,]
     samp_pt <- proc.time()
-    cat("  sampler:", i, "/", nrow(samplers), "(",s$s_name,") start\n")
+    cat("  sampler:", i, "/", nrow(samplers), "(",sn,") start\n")
     lapply(seq_len(s$reps), \(j) {
       rep_pt <- proc.time()
       cat("    rep:", j, "/", s$reps)
@@ -90,11 +91,11 @@ simulate <- function(samplers, estimators, required_dists, def) {
 
       postpro_tss <- list()
       estimations <- double()
-      for (l in seq_len(nrow(estimators))) {
-        e <- (estimators %>% filter(e_id == l))[1,]
-        if (e$e_name == "LT_D1") browser() # something produces NA
+      for (l in seq_along(estimators$e_name)) {
+        en <- estimators$e_name[l]
+        e <- (estimators %>% filter(e_name == en))[1,]
         postpro_tss[[l]] <- def$postpros[[e$postpro]](prepro_tss[[e$prepro]])
-        estimations[[l]] <- def$cpds[[e$cpd]](prepro_tss[[l]])
+        estimations[[l]] <- def$cpds[[e$cpd]](postpro_tss[[l]])
       }
 
       cat(", duration:", (proc.time()-rep_pt)[3], "s\n")
@@ -105,7 +106,7 @@ simulate <- function(samplers, estimators, required_dists, def) {
     }) -> r
     r %>%
       bind_rows() %>%
-      mutate(s_id = i, .before=1) ->
+      mutate(s_name = sn, .before=1) ->
       res
     cat("  sampler:", i, "/", nrow(samplers), "end, duration:", (proc.time()-samp_pt)[3], "s\n")
     res

@@ -75,7 +75,7 @@ inco_var <- function(dist_mat) {
     i <- seq_len(k)
     j <- setdiff(1:n, i)
     sum(D[i,i]) / k^2 - sum(D[j,j])/(n-k)^2}) * u*(1-u)
-  prod_var[-c(1, n)]
+  as.matrix(prod_var[-c(1, n)])
 }
 
 eval_betti <- function(pd, epsilon, dimension) {
@@ -104,6 +104,7 @@ pd_values <- function(pds, dim) {
                                decreasing = TRUE))
   nr <- max(sapply(lst, NROW))
   X <- sapply(lst, \(x) x[1:nr])
+  X <- matrix(X, nrow=nr)
   X[is.na(X)] <- 0
   t(X)
 }
