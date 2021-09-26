@@ -103,6 +103,7 @@ pd_values <- function(pds, dim) {
                                  x[x[,"dimension"]==dim,"Birth"],
                                decreasing = TRUE))
   nr <- max(sapply(lst, NROW))
+  if (nr == 0) return(matrix(0, nrow=length(pds), ncol=1))
   X <- sapply(lst, \(x) x[1:nr])
   X <- matrix(X, nrow=nr)
   X[is.na(X)] <- 0

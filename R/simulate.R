@@ -25,46 +25,36 @@ sample_birth_death <- function(distri1, distri2, n1, n2, m, rate) {
   res
 }
 
-sample_point_ts <- function(sampler, def) {
+sample_point_ts <- function(sampler, distris) {
   switch(
     sampler$kind,
     birth_death = sample_birth_death(
-      def$distri[[sampler$distri1]],
-      def$distri[[sampler$distri2]],
+      distris[[sampler$distri1]],
+      distris[[sampler$distri2]],
       sampler$n1, sampler$n2,
       sampler$m,
       sampler$rate),
     iid = sample_iid(
-      def$distri[[sampler$distri1]],
+      distris[[sampler$distri1]],
       sampler$m1,
       sampler$n1,
-      def$distri[[sampler$distri2]],
+      distris[[sampler$distri2]],
       sampler$m2,
       sampler$n2),
     stop("unknown kind of sampler ", sampler$kind))
 }
 
-
-call_proc <- function(proc, pre_pros, dist_mats, pd_ts) {
-  proc_fun <- pre_pros[[proc$pre_pro]]
-  proc_fun_args <- list()
-  if (proc$arg_dist) {
-    proc_fun_args$dist_mat <- semi_join(
-      dist_mats,
-      proc,
-      by=setdiff(names(dist_mats), "matrix"))$matrix[[1]]
-  }
-  if (proc$arg_pds)
-    proc_fun_args$pds <- pd_ts
-  do.call(proc_fun, proc_fun_args)
-}
-
 #' @export
-simulate <- function(samplers, estimators, required_dists, def) {
+simulate <- function(samplers, estimators, required_dists) {
   sim_pt <- proc.time()
-  cat("sim: start\n")
 
-  prepros <- unique(estimators$prepro)
+  cat("prepare simulation\n")
+
+  distri_names <- unique(c(samplers$distri1, samplers$distri2))
+  distributions <- create_img_sampler(distri_names)
+  unique_prepro_names <- unique(estimators$prepro)
+
+  cat("sim: start\n")
 
   lapply(seq_along(samplers$s_name), \(i) {
     sn <- samplers$s_name[i]
@@ -74,7 +64,7 @@ simulate <- function(samplers, estimators, required_dists, def) {
     lapply(seq_len(s$reps), \(j) {
       rep_pt <- proc.time()
       cat("    rep:", j, "/", s$reps)
-      point_ts <- sample_point_ts(s, def)
+      point_ts <- sample_point_ts(s, distributions)
       pd_ts <- map(point_ts, pd, filtration=s$filt)
 
       required_dists %>%
@@ -85,17 +75,17 @@ simulate <- function(samplers, estimators, required_dists, def) {
       names(dist_mats) <- dist_mats_tb$d_name
 
       prepro_tss <- lapply(
-        prepros,
-        \(prep) def$prepros[[prep]](point_ts, pd_ts, dist_mats))
-      names(prepro_tss) <- prepros
+        unique_prepro_names,
+        \(pn) prepros[[pn]](point_ts, pd_ts, dist_mats))
+      names(prepro_tss) <- unique_prepro_names
 
       postpro_tss <- list()
       estimations <- double()
       for (l in seq_along(estimators$e_name)) {
         en <- estimators$e_name[l]
         e <- (estimators %>% filter(e_name == en))[1,]
-        postpro_tss[[l]] <- def$postpros[[e$postpro]](prepro_tss[[e$prepro]])
-        estimations[[l]] <- def$cpds[[e$cpd]](postpro_tss[[l]])
+        postpro_tss[[l]] <- postpros[[e$postpro]](prepro_tss[[e$prepro]])
+        estimations[[l]] <- cpds[[e$cpd]](postpro_tss[[l]])
       }
 
       cat(", duration:", (proc.time()-rep_pt)[3], "s\n")
@@ -116,3 +106,74 @@ simulate <- function(samplers, estimators, required_dists, def) {
   cat("sim: end, duration:", (proc.time()-sim_pt)[3], "s\n")
   results
 }
+
+simulate_parallel <- function(samplers, estimators, required_dists, n_cores=parallel::detectCores()-1) {
+  sim_pt <- proc.time()
+
+  cat("prepare simulation\n")
+
+  distri_names <- unique(c(samplers$distri1, samplers$distri2))
+  distributions <- create_img_sampler(distri_names)
+  unique_prepro_names <- unique(estimators$prepro)
+
+  clstr <- parallel::makeCluster(n_cores, type = "PSOCK")
+  parallel::clusterExport(
+    clstr,
+    c("samplers", "estimators", "required_dists", "distributions"),
+    envir=rlang::current_env())
+  parallel::clusterExport(
+    clstr,
+    rlang::env_names(rlang::env_parent()),
+    envir=rlang::env_parent())
+
+  cat("sim: start\n")
+
+  lapply(seq_along(samplers$s_name), \(i) {
+    sn <- samplers$s_name[i]
+    s <- (samplers %>% filter(s_name == sn))[1,]
+    samp_pt <- proc.time()
+    cat("  sampler:", i, "/", nrow(samplers), "(",sn,") start\n")
+    parallel::parLapply(clstr, seq_len(s$reps), s=s, fun=\(j, s) {
+      point_ts <- sample_point_ts(s, distributions)
+      pd_ts <- purrr::map(point_ts, pd, filtration=s$filt)
+
+      dist_mats_tb <- dplyr::mutate(
+        dplyr::rowwise(required_dists),
+        matrix = list(dist_mat_wasserstein(pd_ts, power, dim)))
+      dist_mats <- dist_mats_tb$matrix
+      names(dist_mats) <- dist_mats_tb$d_name
+
+      prepro_tss <- lapply(
+        unique_prepro_names,
+        \(pn) prepros[[pn]](point_ts, pd_ts, dist_mats))
+      names(prepro_tss) <- unique_prepro_names
+
+      postpro_tss <- list()
+      estimations <- double()
+      for (l in seq_along(estimators$e_name)) {
+        en <- estimators$e_name[l]
+        e <- (dplyr::filter(estimators, e_name == en))[1,]
+        postpro_tss[[l]] <- postpros[[e$postpro]](prepro_tss[[e$prepro]])
+        estimations[[l]] <- cpds[[e$cpd]](postpro_tss[[l]])
+      }
+
+      tb <- tibble::tibble(e_name=estimators$e_name, rep_nr=j, estimation=estimations)
+      tb$postpro_ts <- postpro_tss
+      tb$len <- purrr::map_int(postpro_tss, length)
+      tb
+    }) -> r
+    r %>%
+      bind_rows() %>%
+      mutate(s_name = sn, .before=1) ->
+      res
+    cat("  sampler:", i, "/", nrow(samplers), "end, duration:", (proc.time()-samp_pt)[3], "s\n")
+    res
+  }) %>%
+    bind_rows() ->
+    results
+  parallel::stopCluster(clstr)
+  cat("sim: end, duration:", (proc.time()-sim_pt)[3], "s\n")
+  results
+}
+
+
