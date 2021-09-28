@@ -7,6 +7,12 @@ mae_guess <- function(total, true, support_len) {
   mae
 }
 
+#' Evaluate results of simulation by calculating the relative mean absolute error.
+#'
+#' @param results The results of a simulation.
+#' @param samplers The table of samplers used in the simulation.
+#' @param estimators The table of estimators used in the simulation.
+#' @return A table containing the relative mean absolute error (rmae) for each run.
 rmae_eval <- function(results, samplers, estimators) {
   results %>%
     left_join(samplers %>% select(s_name, n1, n2), by="s_name") %>%

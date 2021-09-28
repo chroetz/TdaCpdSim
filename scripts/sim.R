@@ -35,13 +35,19 @@ estimators <- tribble(
   "FR_V_D0", "FR_RM_D1", "sel3_pad20", "argmax",
   "FR_VV_D0", "FR_VV_D1", "sel1_pad20", "argmax")
 
-set.seed(0)
+set.seed(1)
 #results <- simulate(samplers, estimators, required_dists)
-results <- simulate_parallel(samplers, estimators, required_dists, 1)
+results <- simulate_parallel(samplers, estimators, required_dists, 3)
 
 write_rds(
-  list(results=results, samplers=samplers, estimators=estimators),
+  list(results=results,
+       samplers=samplers,
+       estimators=estimators,
+       required_dists=required_dists),
   paste0("sim_", format(Sys.time(), "%Y%m%d-%H%M%S")))
+
+#lst <- read_rds("sim_20210928-142547")
+#list2env(lst, rlang::global_env())
 
 rmae <- rmae_eval(results, samplers, estimators)
 

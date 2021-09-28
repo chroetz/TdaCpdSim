@@ -13,6 +13,7 @@ pd <- function(Y, max_dim=1, filtration=c("Rips", "Alpha")) {
   pd
 }
 
+
 dist_mat_wasserstein <- function(pds, power, dim) {
   if (power == Inf) {
     D <- dist_mat(pds, TDA::bottleneck, dimension=dim)
@@ -22,16 +23,18 @@ dist_mat_wasserstein <- function(pds, power, dim) {
   D
 }
 
+
 restricted_fm <- function(x, dist, ...) {
   D <- dist_mat(x, dist, ...)
   i <- which.min(rowMeans(D^2))
   x[[i]]
 }
 
-# Fréchet Change Point Detection Stats
-#' @param dist_mat nxn matrix of distances (squared distances)
-fcp_stats <- function(dist_mat) {
-  D <- dist_mat
+#' Fréchet Change Point Detection Stats
+#'
+#' @param dist_mat_sq nxn matrix of squared distances
+fcp_stats <- function(dist_mat_sq) {
+  D <- dist_mat_sq
 
   stopifnot(length(D) > 0)
   stopifnot(is.matrix(D))
@@ -66,8 +69,11 @@ fcp_stats <- function(dist_mat) {
   cbind(mu_dist, v_mean_dist[sel], v_var_dist[sel])
 }
 
-inco_var <- function(dist_mat) {
-  D <- dist_mat
+#' A Fréchet variance statistic without need for calculating a Fréchet mean.
+#'
+#' @param dist_mat_sq nxn matrix of squared distances
+inco_var <- function(dist_mat_sq) {
+  D <- dist_mat_sq
   n <- nrow(D)
   u <- (0:n) / n
   # TODO: is factor u*(1-u) legit?
@@ -77,6 +83,7 @@ inco_var <- function(dist_mat) {
     sum(D[i,i]) / k^2 - sum(D[j,j])/(n-k)^2}) * u*(1-u)
   as.matrix(prod_var[-c(1, n)])
 }
+
 
 eval_betti <- function(pd, epsilon, dimension) {
   sel <- pd[, "dimension"] == dimension
@@ -91,12 +98,6 @@ projected_betty <- function(pds, epsilon, num_pc, dim) {
   pca$rotation[,1:num_pc]
 }
 
-make_projected_betty <- function(epsilon, num_pc, dim) {
-  force(epsilon)
-  force(num_pc)
-  force(dim)
-  function(pds) projected_betty(pds, epsilon, num_pc=num_pc, dim=dim)
-}
 
 pd_values <- function(pds, dim) {
   lst <- lapply(pds, \(x) sort(x[x[,"dimension"]==dim,"Death"]-

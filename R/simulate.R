@@ -44,6 +44,16 @@ sample_point_ts <- function(sampler, distris) {
     stop("unknown kind of sampler ", sampler$kind))
 }
 
+#' Run Simulation
+#'
+#' @param samplers A tibble. Each row describes one distribution for a time
+#'   series of sets of points.
+#' @param estimators A tibble. Each row describes an estimator of the change
+#'   point in the time series.
+#' @param required_dists A tibble. Each row describes a distance of persistence
+#'   diagrams.
+#' @return A tibble. Each row describes the results of applying one estimator to
+#'   a time series created by one of the samplers.
 #' @export
 simulate <- function(samplers, estimators, required_dists) {
   sim_pt <- proc.time()
@@ -60,7 +70,7 @@ simulate <- function(samplers, estimators, required_dists) {
     sn <- samplers$s_name[i]
     s <- (samplers %>% filter(s_name == sn))[1,]
     samp_pt <- proc.time()
-    cat("  sampler:", i, "/", nrow(samplers), "(",sn,") start\n")
+    cat("  sampler:", i, "/", nrow(samplers), "start,", sn, "\n")
     lapply(seq_len(s$reps), \(j) {
       rep_pt <- proc.time()
       cat("    rep:", j, "/", s$reps)
@@ -107,6 +117,7 @@ simulate <- function(samplers, estimators, required_dists) {
   results
 }
 
+# repetitions run in parallel (only beneficial for n_cores > 1 and reps > 1)
 simulate_parallel <- function(samplers, estimators, required_dists, n_cores=parallel::detectCores()-1) {
   sim_pt <- proc.time()
 
@@ -128,12 +139,22 @@ simulate_parallel <- function(samplers, estimators, required_dists, n_cores=para
 
   cat("sim: start\n")
 
+  # creating seeds to make parallel simulation reproducible
+  seeds <- sample.int(2^31-1, size=nrow(samplers))
+
   lapply(seq_along(samplers$s_name), \(i) {
+    set.seed(seeds[i])
     sn <- samplers$s_name[i]
     s <- (samplers %>% filter(s_name == sn))[1,]
+
+    # creating seeds to make parallel simulation reproducible
+    seedss <- sample.int(2^31-1, size=s$reps)
+    parallel::clusterExport(clstr, "seedss", envir=rlang::current_env())
+
     samp_pt <- proc.time()
-    cat("  sampler:", i, "/", nrow(samplers), "(",sn,") start\n")
+    cat("  sampler:", i, "/", nrow(samplers), "start,", sn, "\n")
     parallel::parLapply(clstr, seq_len(s$reps), s=s, fun=\(j, s) {
+      set.seed(seedss[j])
       point_ts <- sample_point_ts(s, distributions)
       pd_ts <- purrr::map(point_ts, pd, filtration=s$filt)
 
