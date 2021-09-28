@@ -1,0 +1,141 @@
+---
+title: "TdaCpdSim"
+author: "Christof"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo=TRUE, eval=FALSE)
+```
+
+# Installation
+
+To install the package form github, execute 
+
+```{r}
+install.packages("remotes")
+remotes::install_github("chroetz/TdaCpdSim")
+```
+
+Call user functions of the package by `TdaCpdSim::user_function()` or by calling `library(TdaCpdSim)` once and then `user_function()`.
+Call internal functions of the package by `TdaCpdSim:::internal_function()`.
+
+# General
+
+1. For a time series of length $n$, sample $n$ sets $\mathbf X_1,\dots,\mathbf  X_n\subset \mathbb R^p$ of points in $\mathbb R^p$ (usually $p=2$). Typically each set has the same size $|\mathbf X_i| = m$, but in principle different sizes are allowed.
+2. Apply a filtration to $\mathbf X_1,\dots,\mathbf  X_n\subset$ to obtain persistence diagrams $P_1,\dots,P_n\subset$.
+3. Calculate all $d(P_i, P_j)$ for certain predefined distances $d$.
+4. Apply estimators for a change point in the time series.
+5. Repeat.
+6. Evaluate the Relative Mean Absolute Error of the estimators.
+
+# Simulation
+
+To run a simulation, call the function `TdaCpdSim::simulate()`.
+
+```{r}
+library(TdaCpdSim)
+results <- simulate(samplers, estimators, required_dists)
+```
+
+All three arguments are tables (R-objects of class `tibble`).
+
+The rows of `samplers` describe the distributions of the time series sampled during the simulation, as well as the number of repetitions and the filtration applied to the time series of sets of points.
+
+The rows of `required_dists` describe which distances of persistence diagrams are calculated for use in the estimators. This is not done by individual estimators themselves as it may be computationally intensive and should not be calculated multiple times.
+
+The rows of `estimators` describe the estimators applied to the time series. They take the time series of sets of points, the time series of persistence diagrams and the distance matrices as arguments and ultimately produce an element in $[1, n]$ as estimated value of the change point.
+
+## Samplers
+
+Here is an example of a samplers table.
+
+```{r eval=TRUE}
+options(tidyverse.quiet = TRUE)
+library(tidyverse)
+
+# s_name must be unique
+samplers <- tribble(
+  ~s_name, ~distri1, ~distri2,
+  "o-.", "circ", "dot",
+  "o-n", "circ", "horseshoe") %>%
+  mutate(kind = "birth_death",
+         filt = "Rips",
+         reps = 2,
+         n1=220, n2=80, 
+         m=20, rate=0.05)
+
+samplers
+```
+
+* `s_name` is a unique identifier of the sampler.
+* `kind` describes which sampling method to use. Currently `"birth_death"` or `"iid"`.
+* `filt`: filtration to create persistence diagram as supported by the `TDA` R-package. Currently `"Rips"` or `"Alpha"`.
+* `reps`: number of repetitions of experiment (sample a time series, apply estimators)
+* the other entries are specific to the `kind` of sampling method
+* `kind="birth_death"` and `kind="iid"`
+  + `n1`, `n2`: The time series has two parts of length $n_1$ and $n_2$ respectively such that $n_1+n_2=n$ is the total length of the time series.
+  + `distri1`, `distri2`: The distributions used to sample points in the two parts of the time series.
+* only `kind="birth_death"`
+  + `rate`: rate for the exponential distribution of the lifetime of points
+  + `m`: fix number of point at every time point
+* only `kind="iid"`
+  + `m1`, `m2`: number of points for the two parts of the time series
+
+### Distributions
+
+### Kind of Sampling Method
+
+## Estimators
+
+```{r eval=TRUE}
+# e_name must be unique
+estimators <- tribble(
+  ~e_name, ~prepro, ~postpro, ~cpd,
+  "IYG_PC1_D0", "IYG_D0", "sel1_norm", "cusum",
+  "IYG_PC3_D0", "IYG_D0", "sel123_norm", "cusum",
+  "IYG_PC1_D1", "IYG_D1", "sel1_norm", "cusum",
+  "IYG_PC3_D1", "IYG_D1", "sel123_norm", "cusum",
+  "LT_D0", "LT_D0", "norm", "cusum",
+  "LT_D1", "LT_D1", "norm", "cusum",
+  "FR_M_D0", "FR_RM_D0", "sel1_pad20", "argmax",
+  "FR_MV_D0", "FR_RM_D0", "sel2_pad20", "argmax",
+  "FR_V_D0", "FR_RM_D0", "sel3_pad20", "argmax",
+  "FR_VV_D0", "FR_VV_D0", "sel1_pad20", "argmax",
+  "FR_M_D0", "FR_RM_D1", "sel1_pad20", "argmax",
+  "FR_MV_D0", "FR_RM_D1", "sel2_pad20", "argmax",
+  "FR_V_D0", "FR_RM_D1", "sel3_pad20", "argmax",
+  "FR_VV_D0", "FR_VV_D1", "sel1_pad20", "argmax")
+estimators
+```
+
+Estimators consist of three parts:
+
+1. A Pre-Processor `prepro`.
+2. A Post-Processor `postpro`.
+3. A Change Point Detector `cpd`.
+
+The Pre-Processor maps from the three lists of point sets, persistence diagrams, and distance matrices to a matrix $\mathbb R^{\ell \times q}$ which represents a time series of length $\ell$ (typically $\ell = n$ or $\ell$ is close to $n$) of points of dimension $q$, e.g., a $q$-dimensional statistic calculated form each persistence diagram. The Post-Processor usually consists of selecting one or more dimension form the $q$ dimensions of the Pre-Processor's output, padding /cutoff of the ends of the time series, and application of a norm to obtain a time series represented as a vectors $\mathbb R^k$, where typically $k=\ell$ or $k$ is close to $\ell$. Change Point Detector takes the one-dimensional time series of length $k$ and maps it to a value in $[1, k]$, the estimated location of the change point.
+
+**TODO:** There is a correction that maps form $[1,k]$ to $[1,n]$ by adding $\frac12(n-k)$ to the location.
+
+### Implemented Pre-Processor
+
+### Implemented Post-Processor
+
+### Implemented Change Point Detectors
+
+## Required Dists
+
+```{r eval=TRUE}
+# d_name must be unique
+required_dists <- tribble(
+  ~d_name, ~power, ~dim,
+  "0-Inf", Inf, 0,
+  "1-Inf", Inf, 1)
+required_dists
+```
+
+Wasserstein distances of power `power` applied to features of dimension `dim` of the persistence diagrams.
+
