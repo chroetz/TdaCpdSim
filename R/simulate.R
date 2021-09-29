@@ -31,7 +31,7 @@ sample_point_ts <- function(sampler, distris) {
     birth_death = sample_birth_death(
       distris[[sampler$distri1]],
       distris[[sampler$distri2]],
-      sampler$n1, sampler$n2,
+      sampler$n1, sampler$n-sampler$n1,
       sampler$m,
       sampler$rate),
     iid = sample_iid(
@@ -40,8 +40,50 @@ sample_point_ts <- function(sampler, distris) {
       sampler$n1,
       distris[[sampler$distri2]],
       sampler$m2,
-      sampler$n2),
+      sampler$n-sampler$n1),
     stop("unknown kind of sampler ", sampler$kind))
+}
+
+run_experiment <- function(j, s, seed, verbose, distributions, required_prepros) {
+  if (verbose) {
+    rep_pt <- proc.time()
+    cat("    rep:", j, "/", s$reps)
+  }
+  set.seed(seed)
+  point_ts <- sample_point_ts(s, distributions)
+  pd_ts <- purrr::map(point_ts, pd, filtration=s$filt)
+
+  dist_mats_tb <- dplyr::mutate(
+    dplyr::rowwise(required_dists),
+    matrix = list(dist_mat_wasserstein(pd_ts, power, dim)))
+  dist_mats <- dist_mats_tb$matrix
+  names(dist_mats) <- dist_mats_tb$d_name
+
+  prepro_tss <- lapply(
+    required_prepros,
+    \(pn) prepros[[pn]](point_ts, pd_ts, dist_mats))
+  names(prepro_tss) <- required_prepros
+
+  postpro_tss <- list()
+  estimations <- double()
+  for (l in seq_along(estimators$e_name)) {
+    en <- estimators$e_name[l]
+    e <- (estimators %>% filter(e_name == en))[1,]
+    ts <- prepro_tss[[e$prepro]]
+    if (isTRUE(nchar(e$select) > 0))
+      ts <- ts[, eval(str2lang(e$select)), drop=FALSE]
+    ts <- ts[(1+e$trim):(nrow(ts)-e$trim), , drop=FALSE]
+    postpro_tss[[l]] <- postpros[[e$postpro]](ts)
+    estimations[[l]] <- detectors[[e$detector]](postpro_tss[[l]], s$n)
+  }
+
+  tb <- tibble::tibble(e_name=estimators$e_name, rep_nr=j, estimation=estimations)
+  tb$postpro_ts <- postpro_tss
+  tb$len <- purrr::map_int(postpro_tss, length)
+
+  if (verbose) cat(", duration:", (proc.time()-rep_pt)[3], "s\n")
+
+  tb
 }
 
 #' Run Simulation
@@ -52,90 +94,31 @@ sample_point_ts <- function(sampler, distris) {
 #'   point in the time series.
 #' @param required_dists A tibble. Each row describes a distance of persistence
 #'   diagrams.
+#' @param n_cores An integer. The number of cores to use. If greater 1, than R
+#'   package parallel is used to parallelize repetitions of experiments.
 #' @return A tibble. Each row describes the results of applying one estimator to
 #'   a time series created by one of the samplers.
 #' @export
-simulate <- function(samplers, estimators, required_dists) {
+simulate <- function(samplers, estimators, required_dists, n_cores=1) {
   sim_pt <- proc.time()
 
   cat("prepare simulation\n")
 
   distri_names <- unique(c(samplers$distri1, samplers$distri2))
   distributions <- create_img_sampler(distri_names)
-  unique_prepro_names <- unique(estimators$prepro)
+  required_prepros <- unique(estimators$prepro)
 
-  cat("sim: start\n")
-
-  lapply(seq_along(samplers$s_name), \(i) {
-    sn <- samplers$s_name[i]
-    s <- (samplers %>% filter(s_name == sn))[1,]
-    samp_pt <- proc.time()
-    cat("  sampler:", i, "/", nrow(samplers), "start,", sn, "\n")
-    lapply(seq_len(s$reps), \(j) {
-      rep_pt <- proc.time()
-      cat("    rep:", j, "/", s$reps)
-      point_ts <- sample_point_ts(s, distributions)
-      pd_ts <- map(point_ts, pd, filtration=s$filt)
-
-      required_dists %>%
-        rowwise() %>%
-        mutate(matrix = list(dist_mat_wasserstein(pd_ts, power, dim))) ->
-        dist_mats_tb
-      dist_mats <- dist_mats_tb$matrix
-      names(dist_mats) <- dist_mats_tb$d_name
-
-      prepro_tss <- lapply(
-        unique_prepro_names,
-        \(pn) prepros[[pn]](point_ts, pd_ts, dist_mats))
-      names(prepro_tss) <- unique_prepro_names
-
-      postpro_tss <- list()
-      estimations <- double()
-      for (l in seq_along(estimators$e_name)) {
-        en <- estimators$e_name[l]
-        e <- (estimators %>% filter(e_name == en))[1,]
-        postpro_tss[[l]] <- postpros[[e$postpro]](prepro_tss[[e$prepro]])
-        estimations[[l]] <- cpds[[e$cpd]](postpro_tss[[l]])
-      }
-
-      cat(", duration:", (proc.time()-rep_pt)[3], "s\n")
-      tb <- tibble(e_name=estimators$e_name, rep_nr=j, estimation=estimations)
-      tb$postpro_ts <- postpro_tss
-      tb$len <- map_int(postpro_tss, length)
-      tb
-    }) -> r
-    r %>%
-      bind_rows() %>%
-      mutate(s_name = sn, .before=1) ->
-      res
-    cat("  sampler:", i, "/", nrow(samplers), "end, duration:", (proc.time()-samp_pt)[3], "s\n")
-    res
-  }) %>%
-    bind_rows() ->
-    results
-  cat("sim: end, duration:", (proc.time()-sim_pt)[3], "s\n")
-  results
-}
-
-# repetitions run in parallel (only beneficial for n_cores > 1 and reps > 1)
-simulate_parallel <- function(samplers, estimators, required_dists, n_cores=parallel::detectCores()-1) {
-  sim_pt <- proc.time()
-
-  cat("prepare simulation\n")
-
-  distri_names <- unique(c(samplers$distri1, samplers$distri2))
-  distributions <- create_img_sampler(distri_names)
-  unique_prepro_names <- unique(estimators$prepro)
-
-  clstr <- parallel::makeCluster(n_cores, type = "PSOCK")
-  parallel::clusterExport(
-    clstr,
-    c("samplers", "estimators", "required_dists", "distributions"),
-    envir=rlang::current_env())
-  parallel::clusterExport(
-    clstr,
-    rlang::env_names(rlang::env_parent()),
-    envir=rlang::env_parent())
+  if (n_cores > 1) {
+    clstr <- parallel::makeCluster(n_cores, type = "PSOCK")
+    parallel::clusterExport(
+      clstr,
+      c("samplers", "estimators", "required_dists"),
+      envir=rlang::current_env())
+    parallel::clusterExport(
+      clstr,
+      rlang::env_names(rlang::env_parent()),
+      envir=rlang::env_parent())
+  }
 
   cat("sim: start\n")
 
@@ -149,40 +132,23 @@ simulate_parallel <- function(samplers, estimators, required_dists, n_cores=para
 
     # creating seeds to make parallel simulation reproducible
     seedss <- sample.int(2^31-1, size=s$reps)
-    parallel::clusterExport(clstr, "seedss", envir=rlang::current_env())
 
     samp_pt <- proc.time()
     cat("  sampler:", i, "/", nrow(samplers), "start,", sn, "\n")
-    parallel::parLapply(clstr, seq_len(s$reps), s=s, fun=\(j, s) {
-      set.seed(seedss[j])
-      point_ts <- sample_point_ts(s, distributions)
-      pd_ts <- purrr::map(point_ts, pd, filtration=s$filt)
-
-      dist_mats_tb <- dplyr::mutate(
-        dplyr::rowwise(required_dists),
-        matrix = list(dist_mat_wasserstein(pd_ts, power, dim)))
-      dist_mats <- dist_mats_tb$matrix
-      names(dist_mats) <- dist_mats_tb$d_name
-
-      prepro_tss <- lapply(
-        unique_prepro_names,
-        \(pn) prepros[[pn]](point_ts, pd_ts, dist_mats))
-      names(prepro_tss) <- unique_prepro_names
-
-      postpro_tss <- list()
-      estimations <- double()
-      for (l in seq_along(estimators$e_name)) {
-        en <- estimators$e_name[l]
-        e <- (dplyr::filter(estimators, e_name == en))[1,]
-        postpro_tss[[l]] <- postpros[[e$postpro]](prepro_tss[[e$prepro]])
-        estimations[[l]] <- cpds[[e$cpd]](postpro_tss[[l]])
-      }
-
-      tb <- tibble::tibble(e_name=estimators$e_name, rep_nr=j, estimation=estimations)
-      tb$postpro_ts <- postpro_tss
-      tb$len <- purrr::map_int(postpro_tss, length)
-      tb
-    }) -> r
+    if (n_cores > 1) {
+      r <- parallel::parLapply(
+        clstr,
+        seq_len(s$reps),
+        fun=\(j) run_experiment(j, s, seedss[j], verbose=FALSE,
+                                distributions=distributions,
+                                required_prepros=required_prepros))
+    } else {
+      r <- lapply(
+        seq_len(s$reps),
+        FUN=\(j) run_experiment(j, s, seedss[j], verbose=TRUE,
+                                distributions=distributions,
+                                required_prepros=required_prepros))
+    }
     r %>%
       bind_rows() %>%
       mutate(s_name = sn, .before=1) ->
@@ -192,7 +158,7 @@ simulate_parallel <- function(samplers, estimators, required_dists, n_cores=para
   }) %>%
     bind_rows() ->
     results
-  parallel::stopCluster(clstr)
+  if (n_cores > 1) parallel::stopCluster(clstr)
   cat("sim: end, duration:", (proc.time()-sim_pt)[3], "s\n")
   results
 }

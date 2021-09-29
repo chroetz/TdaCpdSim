@@ -4,7 +4,7 @@
 \alias{simulate}
 \title{Run Simulation}
 \usage{
-simulate(samplers, estimators, required_dists)
+simulate(samplers, estimators, required_dists, n_cores = 1)
 }
 \arguments{
 \item{samplers}{A tibble. Each row describes one distribution for a time
@@ -15,6 +15,9 @@ point in the time series.}
 
 \item{required_dists}{A tibble. Each row describes a distance of persistence
 diagrams.}
+
+\item{n_cores}{An integer. The number of cores to use. If greater 1, than R
+package parallel is used to parallelize repetitions of experiments.}
 }
 \value{
 A tibble. Each row describes the results of applying one estimator to

@@ -1,12 +1,17 @@
+cusum_mat_ts <- function(y) {
+  n <- nrow(y)
+  s <- apply(y, 2, \(x) cumsum(x[-n] - mean(x)))
+  s_norm <- rowSums(s^2)
+  k <- 1:(n-1)
+  corr <- k/n*(n-k)
+  s_corr <- s_norm / corr
+  s_corr
+}
+
 # signature: double(l, p) -> double(k)
 postpros <- list(
-  id = \(X) X,
-  norm = \(X) sqrt(rowSums(X^2)),
-  sel1_norm = \(X) abs(X[,1]),
-  sel123_norm = \(X) sqrt(rowSums(X[,1:3]^2)),
-  sel1_pad20 = \(X) X[21:(nrow(X)-20),1],
-  sel2_pad20 = \(X) X[21:(nrow(X)-20),2],
-  sel3_pad20 = \(X) X[21:(nrow(X)-20),3]
+  id = \(X) as.vector(X),
+  cusum = cusum_mat_ts
 )
 
 register_postpro <- function(name, fun) {

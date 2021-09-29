@@ -2,16 +2,29 @@
 title: "TdaCpdSim"
 author: "Christof"
 date: "`r format(Sys.time(), '%d %B, %Y')`"
-output: html_document
+output:
+  html_document:
+    highlight: tango
+    number_sections: true
+    toc: true
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo=TRUE, eval=FALSE)
+knitr::opts_chunk$set(
+  echo = TRUE, 
+  eval = FALSE,
+  collapse = TRUE,
+  cache = FALSE
+)
 ```
 
-# Installation
+# Introduction
+ 
+The R-package `TdaCpdSim` <https://github.com/chroetz/TdaCpdSim> provides functions to execute and evaluate simulations for evaluation of different change point detection (CP/CPD) methods using topological data analysis (TDA).
 
-To install the package form github, execute 
+## Installation
+
+To install the package form github, execute following commands: 
 
 ```{r}
 install.packages("remotes")
@@ -21,21 +34,31 @@ remotes::install_github("chroetz/TdaCpdSim")
 Call user functions of the package by `TdaCpdSim::user_function()` or by calling `library(TdaCpdSim)` once and then `user_function()`.
 Call internal functions of the package by `TdaCpdSim:::internal_function()`.
 
-# General
 
-1. For a time series of length $n$, sample $n$ sets $\mathbf X_1,\dots,\mathbf  X_n\subset \mathbb R^p$ of points in $\mathbb R^p$ (usually $p=2$). Typically each set has the same size $|\mathbf X_i| = m$, but in principle different sizes are allowed.
-2. Apply a filtration to $\mathbf X_1,\dots,\mathbf  X_n\subset$ to obtain persistence diagrams $P_1,\dots,P_n\subset$.
-3. Calculate all $d(P_i, P_j)$ for certain predefined distances $d$.
-4. Apply estimators for a change point in the time series.
-5. Repeat.
-6. Evaluate the Relative Mean Absolute Error of the estimators.
+```{r eval=TRUE}
+options(tidyverse.quiet = TRUE)
+library(tidyverse)
+library(TdaCpdSim)
+``` 
+
+## Rough Outline of a Simulation
+
+1. Sample $n$ sets $\mathbf X_1,\dots,\mathbf  X_n\subset \mathbb R^p$ of points in $\mathbb R^p$ (usually $p=2$) to create a time series of length $n$. Typically each set has the same size $|\mathbf X_i| = m$, but in principle different sizes are allowed.
+2. Apply a filtration to $\mathbf X_1,\dots,\mathbf  X_n$ to obtain persistence diagrams $P_1,\dots,P_n$.
+3. Apply estimators for a change point in the time series.
+4. Repeat 1 to 3 several times.
+5. Evaluate the relative mean absolute error of the estimators.
+
 
 # Simulation
 
 To run a simulation, call the function `TdaCpdSim::simulate()`.
 
+
 ```{r}
-library(TdaCpdSim)
+# samplers <- ...
+# estimators <- ...
+# required_dists <- ...
 results <- simulate(samplers, estimators, required_dists)
 ```
 
@@ -43,39 +66,36 @@ All three arguments are tables (R-objects of class `tibble`).
 
 The rows of `samplers` describe the distributions of the time series sampled during the simulation, as well as the number of repetitions and the filtration applied to the time series of sets of points.
 
-The rows of `required_dists` describe which distances of persistence diagrams are calculated for use in the estimators. This is not done by individual estimators themselves as it may be computationally intensive and should not be calculated multiple times.
+The rows of `required_dists` describe for which distances $d$ of persistence diagrams the values $d(P_i, P_j)$ are calculated for use in the estimators. This is not done by individual estimators as it may be computationally intensive and should not be calculated multiple times.
 
-The rows of `estimators` describe the estimators applied to the time series. They take the time series of sets of points, the time series of persistence diagrams and the distance matrices as arguments and ultimately produce an element in $[1, n]$ as estimated value of the change point.
+The rows of `estimators` describe the estimators applied to the time series. They take the time series of sets of points, the time series of persistence diagrams, and the distance matrices as arguments and ultimately produce an element in $[1, n]$ as estimated value of the change point.
+
 
 ## Samplers
 
-Here is an example of a samplers table.
+Here is an example of a table of samplers.
 
 ```{r eval=TRUE}
-options(tidyverse.quiet = TRUE)
-library(tidyverse)
-
 # s_name must be unique
 samplers <- tribble(
   ~s_name, ~distri1, ~distri2,
   "o-.", "circ", "dot",
   "o-n", "circ", "horseshoe") %>%
-  mutate(kind = "birth_death",
+  mutate(m=20, n=300, n1=200, rate=0.05,
+         kind = "birth_death",
          filt = "Rips",
-         reps = 2,
-         n1=220, n2=80, 
-         m=20, rate=0.05)
-
+         reps=3)
 samplers
 ```
 
-* `s_name` is a unique identifier of the sampler.
-* `kind` describes which sampling method to use. Currently `"birth_death"` or `"iid"`.
+* `s_name`: a unique identifier of the sampler.
+* `n`: the length of time series to be produced by the sampler.
+* `kind`: describes which sampling method to use. Currently `"birth_death"` or `"iid"`.
 * `filt`: filtration to create persistence diagram as supported by the `TDA` R-package. Currently `"Rips"` or `"Alpha"`.
 * `reps`: number of repetitions of experiment (sample a time series, apply estimators)
 * the other entries are specific to the `kind` of sampling method
 * `kind="birth_death"` and `kind="iid"`
-  + `n1`, `n2`: The time series has two parts of length $n_1$ and $n_2$ respectively such that $n_1+n_2=n$ is the total length of the time series.
+  + `n1`: The time series has two parts of length $n_1$ and $n_2$ respectively such that $n_1+n_2=n$ is the total length of the time series. `n1` is $n_1$. $n_2$ will be calculated form `n1` and `n`.
   + `distri1`, `distri2`: The distributions used to sample points in the two parts of the time series.
 * only `kind="birth_death"`
   + `rate`: rate for the exponential distribution of the lifetime of points
@@ -85,46 +105,59 @@ samplers
 
 ### Distributions
 
+TODO
+
 ### Kind of Sampling Method
+
+TODO
 
 ## Estimators
 
 ```{r eval=TRUE}
 # e_name must be unique
 estimators <- tribble(
-  ~e_name, ~prepro, ~postpro, ~cpd,
-  "IYG_PC1_D0", "IYG_D0", "sel1_norm", "cusum",
-  "IYG_PC3_D0", "IYG_D0", "sel123_norm", "cusum",
-  "IYG_PC1_D1", "IYG_D1", "sel1_norm", "cusum",
-  "IYG_PC3_D1", "IYG_D1", "sel123_norm", "cusum",
-  "LT_D0", "LT_D0", "norm", "cusum",
-  "LT_D1", "LT_D1", "norm", "cusum",
-  "FR_M_D0", "FR_RM_D0", "sel1_pad20", "argmax",
-  "FR_MV_D0", "FR_RM_D0", "sel2_pad20", "argmax",
-  "FR_V_D0", "FR_RM_D0", "sel3_pad20", "argmax",
-  "FR_VV_D0", "FR_VV_D0", "sel1_pad20", "argmax",
-  "FR_M_D0", "FR_RM_D1", "sel1_pad20", "argmax",
-  "FR_MV_D0", "FR_RM_D1", "sel2_pad20", "argmax",
-  "FR_V_D0", "FR_RM_D1", "sel3_pad20", "argmax",
-  "FR_VV_D0", "FR_VV_D1", "sel1_pad20", "argmax")
+  ~e_name, ~prepro, ~select, ~trim, ~postpro, ~detector,
+  "IYG_PC1_D0", "IYG_D0", "1",   0, "cusum", "argmax",
+  "IYG_PC3_D0", "IYG_D0", "1:3", 0, "cusum", "argmax",
+  "IYG_PC1_D1", "IYG_D1", "1",   0, "cusum", "argmax",
+  "IYG_PC3_D1", "IYG_D1", "1:3", 0, "cusum", "argmax",
+  "LT_D0",      "LT_D0",  "",    0, "cusum", "argmax",
+  "LT_D1",      "LT_D1",  "",    0, "cusum", "argmax",
+  "FR_M_D0",    "FR_RM_D0", "1", 20, "id", "argmax",
+  "FR_MV_D0",   "FR_RM_D0", "2", 20, "id", "argmax",
+  "FR_V_D0",    "FR_RM_D0", "3", 20, "id", "argmax",
+  "FR_VV_D0",   "FR_VV_D0", "",  20, "id", "argmax",
+  "FR_M_D1",    "FR_RM_D1", "1", 20, "id", "argmax",
+  "FR_MV_D1",   "FR_RM_D1", "2", 20, "id", "argmax",
+  "FR_V_D1",    "FR_RM_D1", "3", 20, "id", "argmax",
+  "FR_VV_D1",   "FR_VV_D1", "",  20, "id", "argmax")
 estimators
 ```
 
-Estimators consist of three parts:
+Estimators consist of following parts:
 
 1. A Pre-Processor `prepro`.
-2. A Post-Processor `postpro`.
-3. A Change Point Detector `cpd`.
+2. Selection `select` and Trimming `trim`.
+3. A Post-Processor `postpro`.
+4. A Detector `detector`.
 
-The Pre-Processor maps from the three lists of point sets, persistence diagrams, and distance matrices to a matrix $\mathbb R^{\ell \times q}$ which represents a time series of length $\ell$ (typically $\ell = n$ or $\ell$ is close to $n$) of points of dimension $q$, e.g., a $q$-dimensional statistic calculated form each persistence diagram. The Post-Processor usually consists of selecting one or more dimension form the $q$ dimensions of the Pre-Processor's output, padding /cutoff of the ends of the time series, and application of a norm to obtain a time series represented as a vectors $\mathbb R^k$, where typically $k=\ell$ or $k$ is close to $\ell$. Change Point Detector takes the one-dimensional time series of length $k$ and maps it to a value in $[1, k]$, the estimated location of the change point.
+The Pre-Processor maps from the three lists of point sets, persistence diagrams, and distance matrices to a matrix $\mathbb R^{\ell \times q}$ which represents a time series of length $\ell$ (typically $\ell = n$ or $\ell$ is close to $n$) of points of dimension $q$, e.g., a $q$-dimensional statistic calculated form each persistence diagram. The entry in the table is a character value that refers to an implemented pre-processor, see below.
 
-**TODO:** There is a correction that maps form $[1,k]$ to $[1,n]$ by adding $\frac12(n-k)$ to the location.
+Via a selection, one can select $q^\prime$ columns of the $q$ columns of the output of the pre-processor. The entry in the table is a character value that can be evaluated as R-code. An empty string selects all $q$ columns.
+
+With `trim`, one can trim the output of the pre-processor from both ends. For a trim value $t$, the time series is reduced to length $\ell^\prime = \ell-2t$.
+
+The Post-Processor takes the $(\ell^\prime \times q^\prime)$-matrix and maps it to a one-dimensional time series of length $k$. The trivial post-processor `id` maps $\mathbb R^{\ell^\prime \times 1} \to \mathbb R^{\ell^\prime}$ via the identity such that $k = \ell^\prime$. The `cusum` post-processor applies a *cusum*-like transformation to each column and takes the squared Euclidean norm in each row. Here, too, we have $k = \ell^\prime$.
+
+The Detector takes the one-dimensional time series of length $k$ and the original length $n$ and maps them to a value in $[1, n]$, the estimated location of the change point. This is usually done by an $\arg\max$ in combination with centering, i.e., adding $\frac12(n-k)$, to account for $k \neq n$.
 
 ### Implemented Pre-Processor
 
-### Implemented Post-Processor
+* `IYG_D0`, `IYG_D1`: Method by [Islambekov, Yuvaraj, Gel](https://arxiv.org/abs/1910.12939) applied to dimension 0 or dimension 1 features
+* `LT_D0`, `LT_D1`: extract the lifetimes of features from persistence diagram (dim 0 and 1)
+* `FR_RM_D0`, `FR_RM_D1`: 3 statistics based on Fréchet change point detection that require the calculation of a Fréchet mean, but are implemented using the restricted Fréchet mean, i.e., the sample element that minimizes the Fréchet objective function (instead of the minimizer among all elements in the whole metric space of persistence diagrams)
+* `FR_VV_D1`, `FR_VV_D1`: A Fréchet change point detection method based on the Fréchet variance. Does not require calculation of Fréchet means (based on $\mathbf{Var}(X) = \frac12\mathbf E[(X-X^\prime)^2]$ for independent copy $X^\prime$ of $X$, instead of $\mathbf{Var}(X) = \mathbf E[(X-\mathbf E[X])^2]$)
 
-### Implemented Change Point Detectors
 
 ## Required Dists
 
@@ -137,5 +170,103 @@ required_dists <- tribble(
 required_dists
 ```
 
-Wasserstein distances of power `power` applied to features of dimension `dim` of the persistence diagrams.
+This table must contain all distances that are used by one of the estimators. The estimators may refer to a distance matrix via the name `d_name`.
+The available distances are Wasserstein distances of power `power` ($1$ to $\infty$ `Inf`) applied to features of dimension `dim` of the persistence diagrams.
 
+## Save and Load
+
+The three arguments are all tables that can be saved and loaded as CSV-files. See, e.g., the functions `readr::read_csv()` and `readr::write_csv()`.
+
+Simulations may take hours to complete. Thus, it recommended to always save the results (and how the results were created, i.e., the arguments of `simulate()`) in a file. For example, following code saves results and arguments as an RDS-file with a file name that contains a time stamp (requires `library(tidyverse)`).
+
+```{r}
+# results <- simulate(samplers, estimators, required_dists)
+write_rds(
+  list(results = results,
+       samplers = samplers,
+       estimators = estimators,
+       required_dists = required_dists),
+  paste0("sim_", format(Sys.time(), "%Y%m%d-%H%M%S"), ".RDS"))
+```
+
+To load these elements and add them to the global environment, a commands similar to the following can be used.
+
+```{r eval=TRUE}
+lst <- read_rds("sim_20210929-165621.RDS")
+list2env(lst, rlang::global_env())
+```
+
+
+# Evaluate
+
+`simulate()` returns a table with one row for each repeatition of each sampler and each estimator. The columns are
+
+* `e_name`: name of the estimator
+* `s_name`: name of the sampler
+* `rep_nr`: number of repetition
+* `estimation`: the estimated location of the change point
+* `postpro_ts`: the time series of length $k$ returned by the post-processor
+* `len`: $k$
+
+```{r eval=TRUE}
+results
+```
+
+
+
+## Relative Mean Absolute Error
+
+The Meas Absolute Error (MAE) of a simulation with $J$ repetitions, a change point at $s = n_1 + 0.5$ and estimated CPs $\hat s_j$ is $\mathsf{MAE} := \frac1J \sum_{j=1}^J |\hat s_j - s|$. If one guesses as location of the CP uniformly at random on a support $\{1, \dots, k\}$ with centering for a original time series of length $n$, the MAE is 
+$\mathsf{MAE}_{\mathsf{guess}} := \frac1k \sum_{j=1}^k |(j + \frac12(n-k)) - s|$. The relative mean absolute error is defined as $\mathsf{RMAE} := \mathsf{MAE} / \mathsf{MAE}_{\mathsf{guess}}$.
+
+The function `rmae_eval()` calculates the RMAE values from the simulation results.
+
+```{r eval=TRUE}
+rmae <- rmae_eval(results, samplers, estimators)
+rmae
+```
+
+
+## Visualization
+
+```{r eval=TRUE}
+plot_result(results, samplers, "o-.", "FR_M_D0")
+```
+
+* x-axis: times $t \in \{1, \dots, n\}$ of the original time series
+* y-axis: values of the output of the post-processor
+* red: mean post-processor values across all repetitions with quartiles
+* green: mean estimated CP with quartiles
+* blue: true CP
+* dashed black lines indicate the support of the post-processed time series
+
+## Eval Rmd
+
+TODO
+
+```{r}
+# kable, kableExtra, ... colored tables
+```
+
+
+# Further Notes 
+
+## Parallel
+
+Use the argument `n_cores` to enable parallel runs of repetitions.
+The default is `n_cores=1`, which runs the code non-parallel. There is some overhead when using multiple cores. Thus, `n_cores=2` might not always be faster than `n_cores=1` and is always less than twice as fast.
+
+```{r}
+results <- simulate(
+  samplers, estimators, required_dists, 
+  n_cores=parallel::detectCores())
+```
+
+## Reproducibility
+
+Set a random seed via `set.seed()` to make simulations reproducible. This should also work with parallel execution, i.e., with an argument `n_cores` greater than 1, but was not extensively tested.
+
+```{r}
+set.seed(1)
+results <- simulate(samplers, estimators, required_dists)
+```
