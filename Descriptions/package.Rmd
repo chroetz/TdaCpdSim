@@ -131,7 +131,7 @@ Sample `n1` times `m1` points form `distri1` (independently) to obtain $\mathbf 
 
 * `"birth_death"`
 
-Each $\mathbf X_i$ consists of `m` points which were either sampled from `distri1` or `distri2`. To create $\mathbf X_1$, sample `m` points from `distri1` (independently) and for each point sample a lifetime from an exponential distribution (independently) with rate `rate`. Given $\mathbf X_{i}$ create $\mathbf X_{i+1}$ as follows: Reduce the lifetimes of each point by 1. Delete all points which now have negative lifetimes. Sample new points to again have `m` points in total. Reset the lifetimes of the new points to newly sampled values from the exponential distribution with rate `rate`. For $i \leq n_1+0.5 - 0.5*(1/\mathsf{rate})$ `distri1` is used.... TODO
+Each $\mathbf X_i$ consists of `m` points which were either sampled from `distri1` or `distri2`. To create $\mathbf X_1$, sample `m` points from `distri1` (independently) and for each point sample a lifetime from an exponential distribution (independently) with rate `rate`. Given $\mathbf X_{i}$ with lifetimes associated to each point, create $\mathbf X_{i+1}$ as follows: Reduce the lifetimes of each point by 1. Delete all points which now have a negative lifetime. Sample new points to again have `m` points in total. Reset the lifetimes of the new points to newly sampled values from the exponential distribution with rate `rate`. For $i \leq n_1+0.5 - 0.5*(1/\mathsf{rate})$ `distri1` is used. If $i$ is larger, `distri2` is used. This should make the "mean change point" $n_1+0.5$.
 
 
 
@@ -175,7 +175,14 @@ The Post-Processor takes the $(\ell^\prime \times q^\prime)$-matrix and maps it 
 
 The Detector takes the one-dimensional time series of length $k$ and the original length $n$ and maps them to a value in $[1, n]$, the estimated location of the change point. This is usually done by an $\arg\max$ in combination with centering, i.e., adding $\frac12(n-k)$, to account for $k \neq n$.
 
+```{r eval=TRUE}
+get_prepro_names()
+get_postpro_names()
+get_detector_names()
+```
+
 ### Implemented Pre-Processor
+
 
 * `IYG_D0`, `IYG_D1`: Method by [Islambekov, Yuvaraj, Gel](https://arxiv.org/abs/1910.12939) applied to dimension 0 or dimension 1 features
 * `LT_D0`, `LT_D1`: extract the lifetimes of features from persistence diagram (dim 0 and 1)
@@ -264,13 +271,59 @@ plot_result(results, samplers, "o-.", "FR_M_D0")
 * blue: true CP
 * dashed black lines indicate the support of the post-processed time series
 
-## Eval Rmd
+## Pretty Tables
 
-TODO
+The functions `pretty_table()` and `pretty_color_table()` allow to view the results in pretty tables.
 
-```{r}
-# kable, kableExtra, ... colored tables
+```{r eval=TRUE}
+rmae %>% 
+  group_by(e_name) %>% 
+  summarise(sum_rmae = sum(rmae), .groups="drop") %>% 
+  mutate(rank = rank(sum_rmae, ties.method="random")) %>% 
+  arrange(rank) %>% 
+  select(rank, everything()) %>% 
+  pretty_table()
 ```
+
+```{r eval=TRUE}
+rmae %>% 
+  mutate(v = sprintf("%.2f", rmae)) %>% 
+  select(s_name, e_name, v) %>% 
+  pivot_wider(names_from=s_name, values_from=v) ->
+  tb
+rmae %>% 
+  select(s_name, e_name, rmae) %>%
+  pivot_wider(names_from=s_name, values_from=rmae) %>% 
+  select(-e_name)->
+  color_tb
+pretty_color_table(tb, 2:ncol(tb), color_tb)
+```
+
+```{r eval=TRUE}
+rmae %>% 
+  group_by(s_name) %>% 
+  mutate(rank = rank(rmae, ties.method="random")) %>% 
+  arrange(rank) %>% 
+  ungroup() ->
+  x
+x %>% 
+  mutate(v = sprintf("%.2f %s", rmae, e_name)) %>% 
+  select(rank, s_name, v) %>% 
+  pivot_wider(
+    names_from = s_name, 
+    values_from = v) ->
+  tb
+x %>% 
+  select(rank, s_name, rmae) %>% 
+  pivot_wider(
+    names_from = s_name, 
+    values_from = rmae) %>% 
+  select(-rank) ->
+  color_tb
+pretty_color_table(tb, 2:ncol(tb), color_tb)
+```
+
+
 
 
 # Further Notes 
@@ -294,3 +347,11 @@ Set a random seed via `set.seed()` to make simulations reproducible. This should
 set.seed(1)
 results <- simulate_ts(samplers, estimators, required_dists)
 ```
+
+# Extending the Package
+
+## New Pre-Processors
+
+TODO
+
+file `def_prepros.R`

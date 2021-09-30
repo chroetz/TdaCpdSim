@@ -14,15 +14,18 @@ postpros <- list(
   cusum = cusum_mat_ts
 )
 
+#' @export
 register_postpro <- function(name, fun) {
   postpros[[name]] <- fun
 }
 
+#' @export
 get_postpro_names <- function() {
   names(postpros)
 }
 
-get_postpros <- function() {
-  postpros
+#' @export
+get_postpro <- function(name) {
+  postpros[[name]]
 }
 

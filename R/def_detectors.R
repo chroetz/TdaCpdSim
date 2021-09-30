@@ -3,14 +3,17 @@ detectors <- list(
   argmax = \(y, n) which.max(y) + (n-length(y))/2
 )
 
-register_cpd <- function(name, fun) {
+#' @export
+register_detector <- function(name, fun) {
   detectors[[name]] <- fun
 }
 
+#' @export
 get_detector_names <- function() {
   names(detectors)
 }
 
-get_detectors <- function() {
-  detectors
+#' @export
+get_detector <- function(name) {
+  detector[[name]]
 }

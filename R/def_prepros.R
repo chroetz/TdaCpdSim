@@ -12,14 +12,17 @@ prepros <- list(
   LT_D1 = \(point_ts, pd_ts, dist_mats) pd_values(pd_ts, dim=1)
 )
 
+#' @export
 register_prepro <- function(name, fun) {
   prepros[[name]] <- fun
 }
 
+#' @export
 get_prepro_names <- function() {
   names(prepros)
 }
 
-get_prepros <- function() {
-  prepros
+#' @export
+get_prepro <- function(name) {
+  prepros[[name]]
 }

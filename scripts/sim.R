@@ -45,9 +45,9 @@ write_rds(
        estimators=estimators,
        required_dists=required_dists),
   paste0("sim_", format(Sys.time(), "%Y%m%d-%H%M%S"), ".RDS"))
-#
-# #lst <- read_rds("sim_20210928-142547")
-# #list2env(lst, rlang::global_env())
-#
+
+# lst <- read_rds("sim_20210928-142547")
+# list2env(lst, rlang::global_env())
+
 # rmae <- rmae_eval(results, samplers, estimators)
 
