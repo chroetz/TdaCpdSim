@@ -86,7 +86,7 @@ run_experiment <- function(j, s, seed, verbose, distributions, required_prepros)
   tb
 }
 
-#' Run Simulation
+#' Run a Simulation of a Time Series
 #'
 #' @param samplers A tibble. Each row describes one distribution for a time
 #'   series of sets of points.
@@ -99,13 +99,13 @@ run_experiment <- function(j, s, seed, verbose, distributions, required_prepros)
 #' @return A tibble. Each row describes the results of applying one estimator to
 #'   a time series created by one of the samplers.
 #' @export
-simulate <- function(samplers, estimators, required_dists, n_cores=1) {
+simulate_ts <- function(samplers, estimators, required_dists, n_cores=1) {
   sim_pt <- proc.time()
 
   cat("prepare simulation\n")
 
   distri_names <- unique(c(samplers$distri1, samplers$distri2))
-  distributions <- create_img_sampler(distri_names)
+  distributions <- create_img_distris(distri_names)
   required_prepros <- unique(estimators$prepro)
 
   if (n_cores > 1) {

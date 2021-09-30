@@ -37,16 +37,14 @@ estimators <- tribble(
   "FR_VV_D1",   "FR_VV_D1", "",  20, "id", "argmax")
 
 set.seed(1)
-results1 <- simulate(samplers, estimators, required_dists)
-set.seed(1)
-results2 <- simulate(samplers, estimators, required_dists, 4)
+results <- simulate_ts(samplers, estimators, required_dists, 4)
 
-# write_rds(
-#   list(results=results,
-#        samplers=samplers,
-#        estimators=estimators,
-#        required_dists=required_dists),
-#   paste0("sim_", format(Sys.time(), "%Y%m%d-%H%M%S"), ".RDS"))
+write_rds(
+  list(results=results,
+       samplers=samplers,
+       estimators=estimators,
+       required_dists=required_dists),
+  paste0("sim_", format(Sys.time(), "%Y%m%d-%H%M%S"), ".RDS"))
 #
 # #lst <- read_rds("sim_20210928-142547")
 # #list2env(lst, rlang::global_env())

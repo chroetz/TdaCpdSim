@@ -15,11 +15,11 @@ load_img <- function(file) {
   x
 }
 
-sample_img <- function(n, x, sd=1/sqrt(length(x)), trans=NULL, rot=NULL) {
-  X <- normalized_coor(x)
-  idx <- (1:length(x))[x > 0]
-  i <- sample(idx, size=n, prob=x[x>0], replace=TRUE)
-  v <- X[i,,drop=FALSE]
+sample_img <- function(n, img_mat, sd=1/sqrt(length(img_mat)), trans=NULL, rot=NULL) {
+  pix_coor <- normalized_coor(img_mat)
+  idx <- (1:length(img_mat))[img_mat > 0]
+  i <- sample(idx, size=n, prob=img_mat[img_mat>0], replace=TRUE)
+  v <- pix_coor[i,,drop=FALSE]
   r <- v + rnorm(length(v), sd=sd)
   if (!is.null(trans)) {
     r <- r - rep(trans, each=nrow(r))
@@ -31,18 +31,20 @@ sample_img <- function(n, x, sd=1/sqrt(length(x)), trans=NULL, rot=NULL) {
 }
 
 make_img_sampler <- function(file) {
-  x <- load_img(file)
+  img_mat <- load_img(file)
 
-  Y <- sample_img(1e7, x)
+  # calculate transformations for zero mean and identity covariance
+  Y <- sample_img(1e7, img_mat)
   trans <- colMeans(Y)
   en <- eigen(cov(Y))
   rot <- en$vectors %*% diag(en$values^(-0.5)) %*% t(en$vectors)
 
-  function(n) sample_img(n, x, trans=trans, rot=rot)
+  function(n) sample_img(n, img_mat, trans=trans, rot=rot)
 }
 
-create_img_sampler <- function(img_names) {
-  lst <- lapply(img_names, \(x) make_img_sampler(paste0("img/",x,".png")))
+#' @export
+create_img_distris <- function(img_names, path="img/") {
+  lst <- lapply(img_names, \(x) make_img_sampler(paste0(path,x,".png")))
   nms <- names(img_names)
   if (is.null(nms)) nms <- img_names
   names(lst) <- nms

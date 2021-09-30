@@ -52,14 +52,14 @@ library(TdaCpdSim)
 
 # Simulation
 
-To run a simulation, call the function `TdaCpdSim::simulate()`.
+To run a simulation, call the function `TdaCpdSim::simulate_ts()`.
 
 
 ```{r}
 # samplers <- ...
 # estimators <- ...
 # required_dists <- ...
-results <- simulate(samplers, estimators, required_dists)
+results <- simulate_ts(samplers, estimators, required_dists)
 ```
 
 All three arguments are tables (R-objects of class `tibble`).
@@ -105,11 +105,35 @@ samplers
 
 ### Distributions
 
-TODO
+The argument `distri1` and `distri2` name a distribution that is created from the images in the package subfolder `img`. An distribution (on $\mathbb R^2) $is create from an image by a mixture of Gaussians on each pixel where the individual Gaussian is weighted by the lightness of the pixel. The variance of each Gaussian is set to $(\mathsf{number of pixels})^{-1}$. As we do not want to just find changes in mean or variance, these distributions are then normalized to have zero mean and an identity covariance matrix.
+
+
+```{r eval=TRUE}
+distri_names <- c("dot", "8")
+distributions <- create_img_distris(distri_names, path="../img/")
+n <- 1e4
+for (distri_name in distri_names) {
+  points <- distributions[[distri_name]](n)
+  rng <- max(abs(points))[c(1,1)] * c(-1,1)
+  par(mar=c(2,2,2,2))
+  plot(NA, xlim=rng, ylim=rng, asp=1)
+  points(points, col=2, pch=".")
+  grid()
+  title(distri_name)
+}
+``` 
 
 ### Kind of Sampling Method
 
-TODO
+* `"iid"`
+
+Sample `n1` times `m1` points form `distri1` (independently) to obtain $\mathbf X_1, \dots, \mathbf X_{n_1}$. Then sample `n-n1` times `m2` points form `distri2` (independently) to obtain $\mathbf X_{n_2}, \dots, \mathbf X_{n}$. All $\mathbf X_i$ are independent. Inside each of the two parts of the time series, the $\mathbf X_i$ are iid. Thus, also the resulting persistence diagrams are independent / iid.
+
+* `"birth_death"`
+
+Each $\mathbf X_i$ consists of `m` points which were either sampled from `distri1` or `distri2`. To create $\mathbf X_1$, sample `m` points from `distri1` (independently) and for each point sample a lifetime from an exponential distribution (independently) with rate `rate`. Given $\mathbf X_{i}$ create $\mathbf X_{i+1}$ as follows: Reduce the lifetimes of each point by 1. Delete all points which now have negative lifetimes. Sample new points to again have `m` points in total. Reset the lifetimes of the new points to newly sampled values from the exponential distribution with rate `rate`. For $i \leq n_1+0.5 - 0.5*(1/\mathsf{rate})$ `distri1` is used.... TODO
+
+
 
 ## Estimators
 
@@ -177,10 +201,10 @@ The available distances are Wasserstein distances of power `power` ($1$ to $\inf
 
 The three arguments are all tables that can be saved and loaded as CSV-files. See, e.g., the functions `readr::read_csv()` and `readr::write_csv()`.
 
-Simulations may take hours to complete. Thus, it recommended to always save the results (and how the results were created, i.e., the arguments of `simulate()`) in a file. For example, following code saves results and arguments as an RDS-file with a file name that contains a time stamp (requires `library(tidyverse)`).
+Simulations may take hours to complete. Thus, it recommended to always save the results (and how the results were created, i.e., the arguments of `simulate_ts()`) in a file. For example, following code saves results and arguments as an RDS-file with a file name that contains a time stamp (requires `library(tidyverse)`).
 
 ```{r}
-# results <- simulate(samplers, estimators, required_dists)
+# results <- simulate_ts(samplers, estimators, required_dists)
 write_rds(
   list(results = results,
        samplers = samplers,
@@ -192,14 +216,14 @@ write_rds(
 To load these elements and add them to the global environment, a commands similar to the following can be used.
 
 ```{r eval=TRUE}
-lst <- read_rds("sim_20210929-165621.RDS")
+lst <- read_rds("sim_20210930-104147.RDS")
 list2env(lst, rlang::global_env())
 ```
 
 
 # Evaluate
 
-`simulate()` returns a table with one row for each repeatition of each sampler and each estimator. The columns are
+`simulate_ts()` returns a table with one row for each repeatition of each sampler and each estimator. The columns are
 
 * `e_name`: name of the estimator
 * `s_name`: name of the sampler
@@ -257,7 +281,7 @@ Use the argument `n_cores` to enable parallel runs of repetitions.
 The default is `n_cores=1`, which runs the code non-parallel. There is some overhead when using multiple cores. Thus, `n_cores=2` might not always be faster than `n_cores=1` and is always less than twice as fast.
 
 ```{r}
-results <- simulate(
+results <- simulate_ts(
   samplers, estimators, required_dists, 
   n_cores=parallel::detectCores())
 ```
@@ -268,5 +292,5 @@ Set a random seed via `set.seed()` to make simulations reproducible. This should
 
 ```{r}
 set.seed(1)
-results <- simulate(samplers, estimators, required_dists)
+results <- simulate_ts(samplers, estimators, required_dists)
 ```

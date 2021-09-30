@@ -15,6 +15,7 @@ RoxygenNote: 7.1.2
 Imports: 
     dplyr,
     magrittr,
+    png,
     purrr,
     TDA,
     tibble
