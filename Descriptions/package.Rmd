@@ -260,8 +260,10 @@ rmae
 
 ## Visualization
 
+### Plot Summary
+
 ```{r eval=TRUE}
-plot_result(results, samplers, "o-.", "FR_M_D0")
+plot_result_summary(results, samplers, "o-.", "FR_M_D0")
 ```
 
 * x-axis: times $t \in \{1, \dots, n\}$ of the original time series
@@ -270,6 +272,13 @@ plot_result(results, samplers, "o-.", "FR_M_D0")
 * green: mean estimated CP with quartiles
 * blue: true CP
 * dashed black lines indicate the support of the post-processed time series
+
+### Plot All Runs
+
+```{r eval=TRUE}
+plot_result_all(results, samplers, "o-.", "FR_M_D0")
+```
+
 
 ## Pretty Tables
 

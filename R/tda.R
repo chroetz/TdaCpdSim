@@ -53,7 +53,7 @@ fcp_stats <- function(dist_mat_sq) {
   corr <- u*(1-u) # correction factor
 
   # statistic 1
-  mu_dist <- D[cbind(mu_i_left[sel], mu_i_right[sel])] * corr[sel]
+  mu_dist <- D[cbind(mu_i_left[sel], mu_i_right[sel])] # * corr[sel]
 
   # statistic 2
   v_trans_left <- D_cumsum_left[cbind(sep+1, mu_i_right)]/sep
@@ -80,7 +80,7 @@ inco_var <- function(dist_mat_sq) {
   prod_var <- sapply(0:n, \(k) {
     i <- seq_len(k)
     j <- setdiff(1:n, i)
-    sum(D[i,i]) / k^2 - sum(D[j,j])/(n-k)^2}) * u*(1-u)
+    sum(D[i,i]) / k^2 - sum(D[j,j])/(n-k)^2})^2 * u*(1-u)
   as.matrix(prod_var[-c(1, n)])
 }
 

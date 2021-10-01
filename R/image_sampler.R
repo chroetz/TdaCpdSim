@@ -38,6 +38,7 @@ make_img_sampler <- function(file) {
   trans <- colMeans(Y)
   en <- eigen(cov(Y))
   rot <- en$vectors %*% diag(en$values^(-0.5)) %*% t(en$vectors)
+  rm(Y, en, file)
 
   function(n) sample_img(n, img_mat, trans=trans, rot=rot)
 }
