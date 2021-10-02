@@ -44,7 +44,11 @@ sample_point_ts <- function(sampler, distris) {
     stop("unknown kind of sampler ", sampler$kind))
 }
 
-run_experiment <- function(j, s, seed, verbose, distributions, required_prepros) {
+run_experiment <- function(j, s, seed, verbose,
+                           distributions, required_prepros, estimators) {
+  ppdiff <- setdiff(required_prepros, names(prepros))
+  if (length(ppdiff) > 0) stop("Unknow Pre-Processors ", paste(ppdiff,collapse=","))
+
   if (verbose) {
     rep_pt <- proc.time()
     cat("    rep:", j, "/", s$reps)
@@ -53,11 +57,15 @@ run_experiment <- function(j, s, seed, verbose, distributions, required_prepros)
   point_ts <- sample_point_ts(s, distributions)
   pd_ts <- purrr::map(point_ts, pd, filtration=s$filt)
 
-  dist_mats_tb <- dplyr::mutate(
-    dplyr::rowwise(required_dists),
-    matrix = list(dist_mat_wasserstein(pd_ts, power, dim)))
-  dist_mats <- dist_mats_tb$matrix
-  names(dist_mats) <- dist_mats_tb$d_name
+  if (nrow(required_dists) > 0) {
+    dist_mats_tb <- dplyr::mutate(
+      dplyr::rowwise(required_dists),
+      matrix = list(dist_mat_wasserstein(pd_ts, power, dim)))
+    dist_mats <- dist_mats_tb$matrix
+    names(dist_mats) <- dist_mats_tb$d_name
+  } else {
+    dist_mats_tb <- list()
+  }
 
   prepro_tss <- lapply(
     required_prepros,
@@ -105,7 +113,7 @@ simulate_ts <- function(samplers, estimators, required_dists, n_cores=1) {
   cat("prepare simulation\n")
 
   distri_names <- unique(c(samplers$distri1, samplers$distri2))
-  distributions <- create_img_distris(distri_names)
+  distributions <- create_distris(distri_names)
   required_prepros <- unique(estimators$prepro)
 
   if (n_cores > 1) {
@@ -141,13 +149,15 @@ simulate_ts <- function(samplers, estimators, required_dists, n_cores=1) {
         seq_len(s$reps),
         fun=\(j) run_experiment(j, s, seedss[j], verbose=FALSE,
                                 distributions=distributions,
-                                required_prepros=required_prepros))
+                                required_prepros=required_prepros,
+                                estimators=estimators))
     } else {
       r <- lapply(
         seq_len(s$reps),
         FUN=\(j) run_experiment(j, s, seedss[j], verbose=TRUE,
                                 distributions=distributions,
-                                required_prepros=required_prepros))
+                                required_prepros=required_prepros,
+                                estimators=estimators))
     }
     r %>%
       bind_rows() %>%

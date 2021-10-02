@@ -1,0 +1,415 @@
+---
+title: "TdaCpdSim -- Package Description"
+author: "Christof"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output: 
+  github_document:
+    number_sections: true
+    toc: true
+always_allow_html: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE, 
+  eval = FALSE,
+  collapse = TRUE,
+  cache = FALSE
+)
+```
+
+# Introduction
+ 
+The R-package `TdaCpdSim` <https://github.com/chroetz/TdaCpdSim> provides functions to execute and evaluate simulations for the evaluation of different change point detection (CP/CPD) methods in time series (TS) using topological data analysis (TDA).
+
+## Installation
+
+To install the package from github, execute following commands: 
+
+```{r}
+install.packages("remotes")
+remotes::install_github("chroetz/TdaCpdSim")
+```
+
+Call user functions of the package by `TdaCpdSim::user_function()` or by calling `library(TdaCpdSim)` once and then `user_function()`.
+Call internal functions of the package by `TdaCpdSim:::internal_function()`. The package makes use of the `tidyverse`, a collection of packages for data manipulation. So it is usually convenient to load the `tidyverse`.
+
+
+```{r eval=TRUE}
+options(tidyverse.quiet = TRUE)
+library(tidyverse)
+library(TdaCpdSim)
+``` 
+
+## Rough Outline of a Simulation
+
+1. Sample $n$ sets $\mathbf X_1,\dots,\mathbf  X_n\subset \mathbb R^p$ of points in $\mathbb R^p$ (usually $p=2$) to create a time series of length $n$. Typically each set has the same size $|\mathbf X_i| = m$, but in principle different sizes are allowed.
+2. Apply a filtration to $\mathbf X_1,\dots,\mathbf  X_n$ to obtain persistence diagrams $P_1,\dots,P_n$.
+3. Apply estimators for a change point in the time series.
+4. Repeat 1 to 3 several times.
+5. Evaluate the relative mean absolute error of the estimators.
+
+
+# Simulation
+
+To run a simulation, call the function `TdaCpdSim::simulate_ts()`.
+
+
+```{r}
+# samplers <- ...
+# estimators <- ...
+# required_dists <- ...
+results <- simulate_ts(samplers, estimators, required_dists)
+```
+
+All three arguments are tables (R-objects of class `tibble`).
+
+The rows of `samplers` describe the distributions of the time series sampled during the simulation, as well as the number of repetitions and the filtration applied to the time series of sets of points.
+
+The rows of `required_dists` describe for which distances $d$ of persistence diagrams the values $d(P_i, P_j)$ are calculated for use in the estimators. This is not done by individual estimators as it may be computationally intensive and should not be calculated multiple times.
+
+The rows of `estimators` describe the estimators applied to the time series. They take the time series of sets of points, the time series of persistence diagrams, and the distance matrices as arguments and ultimately produce an element in $[1, n]$ as estimated value of the change point.
+
+
+## Samplers
+
+Here is an example of a table of samplers.
+
+```{r eval=TRUE}
+# s_name must be unique
+samplers <- tribble(
+  ~s_name, ~distri1, ~distri2,
+  "o-.", "circ", "dot",
+  "o-n", "circ", "horseshoe") %>%
+  mutate(m=20, n=300, n1=200, rate=0.05,
+         kind = "birth_death",
+         filt = "Rips",
+         reps=3)
+samplers
+```
+
+* `s_name`: a unique identifier of the sampler.
+* `n`: the length of the TS to be produced by the sampler.
+* `kind`: describes which sampling method to use. Currently `"birth_death"` or `"iid"`.
+* `filt`: filtration to create persistence diagram as supported by the `TDA` R-package. Currently `"Rips"` or `"Alpha"`.
+* `reps`: number of repetitions of one experiment (sample TS, apply estimators)
+* `n1`: The TS has two parts of length $n_1$ and $n_2$ respectively such that $n_1+n_2=n$ is the total length of the time series. `n1` is $n_1$. $n_2$ will be calculated form `n1` and `n`. The true location of the CP is defined as $n_1 + \frac12$.
+* `distri1`, `distri2`: The distributions used to sample points in the two parts of the TS.
+* only `kind="birth_death"`
+  + `rate`: rate for the exponential distribution of the lifetime of points
+  + `m`: fix number of point at every time point
+* only `kind="iid"`
+  + `m1`, `m2`: number of points for the two parts of the TS
+
+### Distributions
+
+The argument `distri1` and `distri2` name a distribution that is created from the images in a subfolder named `img` of the working directory (this path can be changed via `set_image_folder_path("new/path/")`, see also `get_image_folder_path()`). A distribution (on $\mathbb R^2$) is created from an image by a mixture of Gaussians on each pixel, where the individual Gaussian is weighted by the lightness of the pixel. The variance of each Gaussian is set to $(\mathsf{numberOfPixels})^{-1}$. As we do not want to just find changes in mean or variance, these distributions are then normalized to have zero mean and an identity covariance matrix.
+
+
+```{r eval=TRUE}
+distri_names <- c("dot", "8")
+distributions <- create_distris(distri_names)
+n <- 1e4
+for (distri_name in distri_names) {
+  points <- distributions[[distri_name]](n)
+  rng <- max(abs(points))[c(1,1)] * c(-1,1)
+  par(mar=c(2,2,2,2))
+  plot(NA, xlim=rng, ylim=rng, asp=1)
+  points(points, col=2, pch=".")
+  grid()
+  title(distri_name)
+}
+``` 
+
+### Kind of Sampling Method
+
+* `"iid"`
+
+Sample `n1` times `m1` points form `distri1` (independently) to obtain $\mathbf X_1, \dots, \mathbf X_{n_1}$. Then sample `n-n1` times `m2` points form `distri2` (independently) to obtain $\mathbf X_{n_1+1}, \dots, \mathbf X_{n}$. All $\mathbf X_i$ are independent. Inside each of the two parts of the time series, the $\mathbf X_i$ are iid. Thus, also the resulting persistence diagrams are independent / iid.
+
+* `"birth_death"`
+
+Each $\mathbf X_i$ consists of `m` points which were sampled from `distri1` or `distri2`. To create $\mathbf X_1$, sample `m` points from `distri1` (independently) and for each point sample a lifetime from an exponential distribution (independently) with rate `rate`. Given $\mathbf X_{i}$ with lifetimes associated to each point, create $\mathbf X_{i+1}$ as follows: Reduce the lifetimes of each point by 1. Delete all points which now have a negative lifetime. Sample new points to again have `m` points in total. Reset the lifetimes of the new points to newly sampled values from the exponential distribution with rate `rate`. For $i \leq n_1+0.5 - 0.5*(1/\mathsf{rate})$ `distri1` is used. If $i$ is larger, `distri2` is used. This should make the "mean change point" $n_1+0.5$.
+
+
+
+## Estimators
+
+```{r eval=TRUE}
+# e_name must be unique
+estimators <- tribble(
+  ~e_name, ~prepro, ~select, ~trim, ~postpro, ~detector,
+  "IYG_PC1_D0", "IYG_D0", "1",   0, "cusum", "argmax",
+  "IYG_PC3_D0", "IYG_D0", "1:3", 0, "cusum", "argmax",
+  "IYG_PC1_D1", "IYG_D1", "1",   0, "cusum", "argmax",
+  "IYG_PC3_D1", "IYG_D1", "1:3", 0, "cusum", "argmax",
+  "LT_D0",      "LT_D0",  "",    0, "cusum", "argmax",
+  "LT_D1",      "LT_D1",  "",    0, "cusum", "argmax",
+  "FR_M_D0",    "FR_RM_D0", "1", 20, "id", "argmax",
+  "FR_MV_D0",   "FR_RM_D0", "2", 20, "id", "argmax",
+  "FR_V_D0",    "FR_RM_D0", "3", 20, "id", "argmax",
+  "FR_VV_D0",   "FR_VV_D0", "",  20, "id", "argmax",
+  "FR_M_D1",    "FR_RM_D1", "1", 20, "id", "argmax",
+  "FR_MV_D1",   "FR_RM_D1", "2", 20, "id", "argmax",
+  "FR_V_D1",    "FR_RM_D1", "3", 20, "id", "argmax",
+  "FR_VV_D1",   "FR_VV_D1", "",  20, "id", "argmax")
+estimators
+```
+
+Estimators consist of following parts:
+
+0. A unique name `e_name`.
+1. A Pre-Processor `prepro`.
+2. Selection `select` and Trimming `trim`.
+3. A Post-Processor `postpro`.
+4. A Detector `detector`.
+
+The Pre-Processor maps from the three lists of a) point sets, b) persistence diagrams, and c) distance matrices to a matrix $\mathbb R^{\ell \times q}$ which represents a TS of length $\ell$ (typically $\ell = n$ or $\ell$ is close to $n$) of points of dimension $q$, e.g., a $q$-dimensional statistic calculated form each persistence diagram. The entry in the table is a character value that refers to an implemented pre-processor, see below.
+
+Via a selection, one can select $q^\prime$ columns of the $q$ columns of the output of the pre-processor. The entry in the table is a character value that can be evaluated as R-code. An empty string selects all $q$ columns.
+
+With `trim`, one can trim the output of the pre-processor from both ends of the TS. For a trim value $t$, the TS is reduced to length $\ell^\prime = \ell-2t$.
+
+The Post-Processor takes the $(\ell^\prime \times q^\prime)$-matrix and maps it to a one-dimensional TS of length $k$. The trivial post-processor `id` maps $\mathbb R^{\ell^\prime \times 1} \to \mathbb R^{\ell^\prime}$ via the identity such that $k = \ell^\prime$. The `cusum` post-processor applies a *cusum*-like transformation to each column and takes the squared Euclidean norm in each row. Here, we have $k = \ell^\prime-1$. 
+
+The Detector takes the one-dimensional TS of length $k$ and the original length $n$ and maps them to a value in $[1, n]$, the estimated location of the change point. This is usually done by an $\arg\max$ in combination with centering, i.e., adding $\frac12(n-k)$, to account for $k \neq n$.
+
+Following functions list the names of all available pre-/post-processors and detectors. 
+
+```{r eval=TRUE}
+get_prepro_names()
+get_postpro_names()
+get_detector_names()
+```
+
+### Cusum Post-Processor
+
+$f \colon \mathbb R^{k+1} \to \mathbb R^k,\, x \mapsto z$ is applied to each column of the input $X\in\mathbb R^{\ell^\prime \times q^\prime}$.
+Here $y_i = x_i - \bar x$, for $i=1,\dots,k$, where $\bar x$ is the arithmetic mean of the values of the vector $x$. And $z_j = \sqrt{\frac{k+1}{j(k+1-j)}}\sum_{i=1}^j y_i$, for $j=1,\dots,k$. This results in a matrix $Z\in\mathbb R^{k \times q^\prime}$. The output of the `cusum`-post-processor is the vector in $\mathbb R^k$ of squared Euclidean norms of the rows of $Z$.
+
+### Implemented Pre-Processor
+
+
+* `IYG_D0`, `IYG_D1`: Method by [Islambekov, Yuvaraj, Gel](https://arxiv.org/abs/1910.12939) applied to dimension 0 or dimension 1 features
+* `LT_D0`, `LT_D1`: extract the lifetimes (`death - birth`)  of features from persistence diagram (dim 0 and 1) and order them by length; fill with 0s if number of features is not constant in TS.
+* `FR_RM_D0`, `FR_RM_D1`: 3 statistics based on Fréchet change point detection that require the calculation of a Fréchet mean, but are implemented using the restricted Fréchet mean, i.e., the sample element that minimizes the Fréchet objective function (instead of the minimizer among all elements in the whole metric space of persistence diagrams).
+  + column 1: squared distance of Fréchet means of PDs $P_1, \dots, P_i$ and $P_{i+1}, \dots, P_n$
+  + column 2: mean statistic form [Dubey, Müller](https://arxiv.org/abs/1911.11864)
+  + column 3: variance statistic form [Dubey, Müller](https://arxiv.org/abs/1911.11864)
+* `FR_VV_D1`, `FR_VV_D1`: A Fréchet change point detection method based on the Fréchet variance. Similar to column 3 of `FR_RM_Dx`, but does not require calculation of Fréchet means, as it is based on $\mathbf{Var}(X) = \frac12\mathbf E[(X-X^\prime)^2]$ for independent copy $X^\prime$ of $X$, instead of $\mathbf{Var}(X) = \mathbf E[(X-\mathbf E[X])^2]$.
+
+
+## Required Dists
+
+```{r eval=TRUE}
+# d_name must be unique
+required_dists <- tribble(
+  ~d_name, ~power, ~dim,
+  "0-Inf", Inf, 0,
+  "1-Inf", Inf, 1)
+required_dists
+```
+
+This table must contain all distances that are used by one of the estimators. The estimators may refer to a distance matrix via the name `d_name`.
+The available distances are Wasserstein distances of power `power` ($1$ to $\infty$ `Inf`) applied to features of dimension `dim` of the persistence diagrams.
+
+## Save and Load
+
+The three arguments are all tables that can be saved and loaded as CSV-files. See, e.g., the functions `readr::read_csv()` and `readr::write_csv()`.
+
+Simulations may take hours to complete. Thus, it recommended to always save the results (and how the results were created, i.e., the arguments of `simulate_ts()`) in a file. For example, following code saves results and arguments as an RDS-file with a file name that contains a time stamp (requires `library(tidyverse)`).
+
+```{r}
+# results <- simulate_ts(samplers, estimators, required_dists)
+write_rds(
+  list(results = results,
+       samplers = samplers,
+       estimators = estimators,
+       required_dists = required_dists),
+  paste0("sim_", format(Sys.time(), "%Y%m%d-%H%M%S"), ".RDS"))
+```
+
+To load these elements and add them to the global environment, commands similar to the following can be used.
+
+```{r eval=TRUE}
+lst <- read_rds("sim_example.RDS")
+list2env(lst, rlang::global_env())
+```
+
+
+# Evaluate
+
+`simulate_ts()` returns a table with one row for each repetition of each sampler and each estimator. The columns are
+
+* `e_name`: name of the estimator
+* `s_name`: name of the sampler
+* `rep_nr`: number of repetition
+* `estimation`: the estimated location of the change point
+* `postpro_ts`: the time series of length $k$ returned by the post-processor
+* `len`: $k$
+
+```{r eval=TRUE}
+results
+```
+
+
+
+## Relative Mean Absolute Error
+
+The *Mean Absolute Error (MAE)* of a simulation with $J$ repetitions, a change point at $s = n_1 + 0.5$, and estimated CPs $\hat s_j$ is $\mathsf{MAE} := \frac1J \sum_{j=1}^J |\hat s_j - s|$. If one guesses a location of the CP uniformly at random on a support $\{1, \dots, k\}$ with centering for a original time series of length $n$, the MAE is 
+$\mathsf{MAE}_{\mathsf{guess}} := \frac1k \sum_{j=1}^k |(j + \frac12(n-k)) - s|$. The *Relative Mean Absolute Error (RMAE)* is defined as $\mathsf{RMAE} := \mathsf{MAE} / \mathsf{MAE}_{\mathsf{guess}}$.
+
+The function `rmae_eval()` calculates the RMAE values from the simulation results.
+
+```{r eval=TRUE}
+rmae <- rmae_eval(results, samplers, estimators)
+rmae
+```
+
+
+## Visualization
+
+### Plot Summary
+
+```{r eval=TRUE}
+plot_result_summary(results, samplers, "o-.", "FR_M_D0")
+```
+
+* x-axis: times $t \in \{1, \dots, n\}$ of the original time series
+* y-axis: values of the output of the post-processor
+* red: mean post-processor values across all repetitions with quartiles (25% and 75% quantiles)
+* green: mean estimated CP with quartiles 
+* blue: true CP
+* dashed black lines indicate the support of the post-processed time series
+
+### Plot All Runs
+
+```{r eval=TRUE}
+plot_result_all(results, samplers, "o-.", "FR_M_D0")
+```
+
+
+## Pretty Tables
+
+The functions `pretty_table()` and `pretty_color_table()` allow to view the results in pretty tables.
+
+```{r eval=TRUE}
+rmae %>% 
+  group_by(e_name) %>% 
+  summarise(sum_rmae = sum(rmae), .groups="drop") %>% 
+  mutate(rank = rank(sum_rmae, ties.method="random")) %>% 
+  arrange(rank) %>% 
+  select(rank, everything()) %>% 
+  pretty_table()
+```
+
+```{r eval=TRUE}
+rmae %>% 
+  mutate(v = sprintf("%.2f", rmae)) %>% 
+  select(s_name, e_name, v) %>% 
+  pivot_wider(names_from=s_name, values_from=v) ->
+  tb
+rmae %>% 
+  select(s_name, e_name, rmae) %>%
+  pivot_wider(names_from=s_name, values_from=rmae) %>% 
+  select(-e_name)->
+  color_tb
+pretty_color_table(tb, 2:ncol(tb), color_tb)
+```
+
+```{r eval=TRUE}
+rmae %>% 
+  group_by(s_name) %>% 
+  mutate(rank = rank(rmae, ties.method="random")) %>% 
+  arrange(rank) %>% 
+  ungroup() ->
+  x
+x %>% 
+  mutate(v = sprintf("%.2f %s", rmae, e_name)) %>% 
+  select(rank, s_name, v) %>% 
+  pivot_wider(
+    names_from = s_name, 
+    values_from = v) ->
+  tb
+x %>% 
+  select(rank, s_name, rmae) %>% 
+  pivot_wider(
+    names_from = s_name, 
+    values_from = rmae) %>% 
+  select(-rank) ->
+  color_tb
+pretty_color_table(tb, 2:ncol(tb), color_tb)
+```
+
+
+
+
+# Further Notes 
+
+## Parallel
+
+Use the argument `n_cores` to enable parallel runs of repetitions.
+The default is `n_cores=1`, which runs the code non-parallel. There is some overhead when using multiple cores. Thus, `n_cores=2` might not always be faster than `n_cores=1` and is always less than twice as fast.
+
+```{r}
+results <- simulate_ts(
+  samplers, estimators, required_dists, 
+  n_cores=parallel::detectCores())
+```
+
+## Reproducibility
+
+Set a random seed via `set.seed()` to make simulations reproducible. This should also work with parallel execution, i.e., with an argument `n_cores` greater than 1, but was not extensively tested.
+
+```{r}
+set.seed(1)
+results <- simulate_ts(samplers, estimators, required_dists)
+```
+
+# Extending the Package
+
+## New Pre-Processors
+
+In file `def_prepros.R` add a named function object to the list `prepros`. The function must take the three arguments `point_ts, pd_ts, dist_mats` and return a matrix. Alternatively, one can add Pre-Processors without changing the package code using the function `register_prepro(name, fun)`, e.g.:
+
+```{r}
+f <- function(point_ts, pd_ts, dist_mats) {
+  t(sapply(point_ts, rowMeans))
+}
+register_prepro("EUCL_MEAN", f)
+```
+
+
+## New Post-Processors
+
+In file `def_postpros.R` add a named function object to the list `postpros`. The function must one argument -- a $(\ell^\prime \times q^\prime)$-matrix and return a vector. Alternatively, one can add Post-Processors without changing the package code using the function `register_postpro(name, fun)`, e.g.:
+
+```{r}
+f <- function(X) {
+  rowMeans(X^2)
+}
+register_postpro("norm_2_sq", f)
+```
+
+## New Detectors
+
+In file `def_dectectors.R` add a named function object to the list `detectors`. The function must 2 argument -- a vector representing the post-processed TS and the length of the original TS $n$ as a single integer -- and return a single `double` (real value) -- the estimated location of the CP (should be in $[1, n]$. Alternatively, one can add Detectors without changing the package code using the function `register_detector(name, fun)`, e.g.:
+
+```{r}
+f <- function(y, n) {
+  which.min(y) + (n-length(y))/2
+}
+register_detector("argmin", f)
+```
+
+## New Image Distributions
+
+Just create new PNGs and put them in a subfolder `img` of your working directory. They can be referred to by their filename (without ending `.png`).
+
+## Other Distributions
+
+Currently, no other types of distributions are implemented. But the function `create_distris()` (file `distris.R`) has an argument `type` which allows for such extensions in the future. Then the call of `create_distris()` inside of `sample_ts()` might also need change.
+
+## New Kinds of Samplers
+
+Change `sample_point_ts()` in file `simulate.R`.

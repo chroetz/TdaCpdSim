@@ -8,7 +8,7 @@ cusum_mat_ts <- function(y) {
   s_corr
 }
 
-# signature: double(l, p) -> double(k)
+# signature: double(l', q') -> double(k)
 postpros <- list(
   id = \(X) as.vector(X),
   cusum = cusum_mat_ts
@@ -16,7 +16,10 @@ postpros <- list(
 
 #' @export
 register_postpro <- function(name, fun) {
+  force(fun)
   postpros[[name]] <- fun
+  assignInMyNamespace("postpros", postpros)
+  invisible(NULL)
 }
 
 #' @export

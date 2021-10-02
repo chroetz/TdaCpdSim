@@ -1,4 +1,4 @@
-# signature: list(n), list(n), list(n) -> double(l, p)
+# signature: list(n), list(n), list(n) -> double(l, q)
 prepros <- list(
   FR_RM_D0 = \(point_ts, pd_ts, dist_mats) fcp_stats(dist_mats[["0-Inf"]]^2),
   FR_RM_D1 = \(point_ts, pd_ts, dist_mats) fcp_stats(dist_mats[["1-Inf"]]^2),
@@ -14,7 +14,10 @@ prepros <- list(
 
 #' @export
 register_prepro <- function(name, fun) {
+  force(fun)
   prepros[[name]] <- fun
+  assignInMyNamespace("prepros", prepros)
+  invisible(NULL)
 }
 
 #' @export

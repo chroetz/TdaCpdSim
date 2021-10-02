@@ -14,8 +14,13 @@ Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.1.2
 Imports: 
     dplyr,
+    graphics,
+    grDevices,
+    kableExtra,
     magrittr,
     png,
     purrr,
+    rlang,
+    stats,
     TDA,
     tibble

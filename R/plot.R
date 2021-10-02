@@ -35,7 +35,7 @@ plot_reps_summary <- function(postpro_ts, estimation, n, true, title="", p=0.5) 
 }
 
 
-plot_reps_all <- function(postpro_ts, estimation, n, true, title="", p=0.5) {
+plot_reps_all <- function(postpro_ts, estimation, n, true, title="") {
   S <- sapply(postpro_ts, \(x) as.matrix(x))
   S <- S[!apply(S, 1, \(x) any(is.na(x))),]
   colors <- rainbow(ncol(S), alpha=0.3)
@@ -72,6 +72,5 @@ plot_result_all <- function(results, samplers, sn, en) {
     estimation = r$estimation,
     n = s$n,
     true = s$n1 + 0.5,
-    title = paste0("Sampler ", sn, "    Estimator ", en),
-    p = p)
+    title = paste0("Sampler ", sn, "    Estimator ", en))
 }

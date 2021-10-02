@@ -2,6 +2,21 @@ normalized_coor <- function(x) {
   t(t(arrayInd(1:length(x), dim(x))-1)/(dim(x)-1)-0.5)*2
 }
 
+image_folder_path <- "img/"
+
+#' @export
+get_image_folder_path <- function() {
+  image_folder_path
+}
+
+#' @export
+set_image_folder_path <- function(p) {
+  force(p)
+  image_folder_path <- p
+  assignInMyNamespace("image_folder_path", image_folder_path)
+  invisible(NULL)
+}
+
 load_img <- function(file) {
   x <- png::readPNG(file)
   d <- dim(x)
@@ -44,11 +59,17 @@ make_img_sampler <- function(file) {
 }
 
 #' @export
-create_img_distris <- function(img_names, path="img/") {
-  lst <- lapply(img_names, \(x) make_img_sampler(paste0(path,x,".png")))
-  nms <- names(img_names)
-  if (is.null(nms)) nms <- img_names
-  names(lst) <- nms
-  lst
+create_distris <- function(names, path=NULL, type="image") {
+  if (is.null(path)) path <- image_folder_path
+  switch(
+    type,
+    image = {
+      lst <- lapply(names, \(x) make_img_sampler(paste0(path,x,".png")))
+      nms <- names(names)
+      if (is.null(nms)) nms <- names
+      names(lst) <- nms
+      lst
+    },
+    stop("unknown type of distri ", type))
 }
 

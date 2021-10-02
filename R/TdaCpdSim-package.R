@@ -7,5 +7,8 @@
 #' @import tibble
 #' @import dplyr
 #' @import purrr
+#' @importFrom grDevices rainbow
+#' @importFrom graphics abline grid lines
+#' @importFrom stats cov power prcomp quantile rexp rnorm
 ## usethis namespace: end
 NULL

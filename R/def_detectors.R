@@ -5,7 +5,10 @@ detectors <- list(
 
 #' @export
 register_detector <- function(name, fun) {
+  force(fun)
   detectors[[name]] <- fun
+  assignInMyNamespace("detectors", detectors)
+  invisible(NULL)
 }
 
 #' @export
@@ -15,5 +18,5 @@ get_detector_names <- function() {
 
 #' @export
 get_detector <- function(name) {
-  detector[[name]]
+  detectors[[name]]
 }
