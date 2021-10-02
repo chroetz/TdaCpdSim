@@ -336,6 +336,9 @@ sampler and each estimator. The columns are
     post-processor
 -   `len`: *k*
 
+See also `rmae_eval()`, `plot_result_summary()`, and
+`plot_result_all()`.
+
 # 4 Further Notes
 
 ## 4.1 Parallel

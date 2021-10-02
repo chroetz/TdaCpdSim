@@ -212,6 +212,8 @@ list2env(lst, rlang::global_env())
 * `postpro_ts`: the time series of length $k$ returned by the post-processor
 * `len`: $k$
 
+See also `rmae_eval()`, `plot_result_summary()`, and `plot_result_all()`.
+
 # Further Notes 
 
 ## Parallel
