@@ -45,7 +45,8 @@ sample_point_ts <- function(sampler, distris) {
 }
 
 run_experiment <- function(j, s, seed, verbose,
-                           distributions, required_prepros, estimators) {
+                           distributions, required_prepros,
+                           estimators, required_dists) {
   ppdiff <- setdiff(required_prepros, names(prepros))
   if (length(ppdiff) > 0) stop("Unknow Pre-Processors ", paste(ppdiff,collapse=","))
 
@@ -150,14 +151,16 @@ simulate_ts <- function(samplers, estimators, required_dists, n_cores=1) {
         fun=\(j) run_experiment(j, s, seedss[j], verbose=FALSE,
                                 distributions=distributions,
                                 required_prepros=required_prepros,
-                                estimators=estimators))
+                                estimators=estimators,
+                                required_dists=required_dists))
     } else {
       r <- lapply(
         seq_len(s$reps),
         FUN=\(j) run_experiment(j, s, seedss[j], verbose=TRUE,
                                 distributions=distributions,
                                 required_prepros=required_prepros,
-                                estimators=estimators))
+                                estimators=estimators,
+                                required_dists=required_dists))
     }
     r %>%
       bind_rows() %>%
