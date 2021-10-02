@@ -23,4 +23,5 @@ Imports:
     rlang,
     stats,
     TDA,
-    tibble
+    tibble,
+    utils
